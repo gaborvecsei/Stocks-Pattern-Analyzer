@@ -11,6 +11,8 @@ from . import utils
 class DataHolder:
     def __init__(self, tickers: list, window_size: int, period_years: int = 5, interval: int = 1):
         self.tickers = tickers
+        if window_size <= 3:
+            raise ValueError("Window size should be bigger than 3")
         self.window_size = window_size
         self.period_years = period_years
         self.interval = interval
@@ -22,10 +24,13 @@ class DataHolder:
         self._max_nb_windows = (self._max_values_per_stock * len(self.tickers))
 
         # This holds the original values
-        self.ticker_originals = np.zeros((len(self.tickers), self._max_values_per_stock), dtype=np.float32)
+        self.ticker_original_values = np.zeros((len(self.tickers), self._max_values_per_stock), dtype=np.float16)
+
+        # This holds all the dates from the original dataframe
+        self.ticker_original_dates = []
 
         # This holds the normalized values of the selected window from a stock
-        self.ticker_windows_norm = np.zeros((self._max_nb_windows, self.window_size), dtype=np.float32)
+        self.ticker_windows_norm = np.zeros((self._max_nb_windows, self.window_size), dtype=np.float16)
 
         # This holds the start and end indices from a dataframe
         self.ticker_window_indices = np.zeros((self._max_nb_windows, 2), dtype=np.uint16)
@@ -55,8 +60,10 @@ class DataHolder:
                         ::-1]
             close_values = ticker_df["Close"].values
 
-            self.ticker_originals[label, :len(close_values)] = close_values
+            self.ticker_original_values[label, :len(close_values)] = close_values
             self.ticker_to_label[ticker] = label
+
+            self.ticker_original_dates.append(ticker_df.index.values)
 
             for i in range(0, len(ticker_df) - self.window_size, 1):
                 start_index = i
@@ -77,6 +84,7 @@ class DataHolder:
         self.window_labels = self.window_labels[self._useful_data_mask]
         self.ticker_window_indices = self.ticker_window_indices[self._useful_data_mask]
         self.ticker_window_dates = np.array(self.ticker_window_dates)
+        # self.ticker_original_dates = np.array(self.ticker_original_dates)
 
         self.label_to_ticker = {v: k for k, v in self.ticker_to_label.items()}
 
@@ -86,19 +94,41 @@ class DataHolder:
         start, end = self.ticker_window_dates[index]
         return start, end
 
-    def get_ticker(self, index: int):
-        return self.label_to_ticker[self.window_labels[index]]
+    def get_ticker_label(self, index):
+        return self.window_labels[index]
 
-    def get_norm_window(self, index: int):
+    def get_ticker_symbol(self, index: int):
+        return self.label_to_ticker[self.get_ticker_label((index))]
+
+    def get_window(self, index: int):
         return self.ticker_windows_norm[index]
+
+    def get_window_with_future(self, index: int, future_size: int, normalize: bool = False) -> tuple:
+        ticker_label = self.get_ticker_label(index)
+        start_index, end_index = self.ticker_window_indices[index]
+
+        start_index -= future_size
+        if start_index < 0:
+            start_index = 0
+
+        dates = self.ticker_original_dates[ticker_label][start_index:end_index]
+
+        values = self.ticker_original_values[ticker_label][start_index:end_index]
+        if normalize:
+            values = utils.min_max_scale(values)
+        return values, dates
+
+    def create_filename_for_today(self):
+        current_date = datetime.now().strftime("%Y_%m_%d")
+        file_name = f"{self.period_years}y_{self.interval}d_{self.window_size}win_{current_date}.pk"
+        return file_name
 
     def serialize(self, file_name: str = None):
         if not self.is_data_downloaded:
             raise ValueError("You need to fill the class with data first")
 
         if file_name is None:
-            current_date = datetime.now().strftime("%Y_%m_%d")
-            file_name = f"{self.period_years}y_{self.interval}d_{self.window_size}win_{current_date}"
+            file_name = self.create_filename_for_today()
 
         with open(file_name, "wb") as f:
             pickle.dump(self, f)
