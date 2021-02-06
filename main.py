@@ -5,8 +5,9 @@ import numpy as np
 
 import stock_pattern_analyzer
 
-DEFAULT_TICKERS = ["AAPL", "MSFT", "AMZN", "BABA", "ROKU", "TDOC", "CRSP", "SQ", "NVTA", "Z", "BIDU", "SPOT", "PRLB",
-                   "TSLA", "GME", "BB", "AMC", "LI", "NIO"]
+# DEFAULT_TICKERS = ["AAPL", "MSFT", "AMZN", "BABA", "ROKU", "TDOC", "CRSP", "SQ", "NVTA", "Z", "BIDU", "SPOT", "PRLB",
+#                    "TSLA", "GME", "BB", "AMC", "LI", "NIO"]
+DEFAULT_TICKERS = ["AAPL", "MSFT"]
 
 
 def parse_args():
@@ -23,36 +24,40 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
 
-    data_holder = stock_pattern_analyzer.DataHolder(tickers=DEFAULT_TICKERS,
-                                                    window_size=args.window_size,
-                                                    period_years=args.period_years,
-                                                    interval=1)
+    data_holder = stock_pattern_analyzer.RawStockDataHolder(ticker_symbols=DEFAULT_TICKERS,
+                                                            period_years=args.period_years,
+                                                            interval=1)
 
     file_path = Path(data_holder.create_filename_for_today())
 
     if not file_path.exists():
-        data_holder.fill_data()
+        data_holder.fill()
         data_holder.serialize()
     else:
-        data_holder = stock_pattern_analyzer.DataHolder.load(str(file_path))
+        data_holder = stock_pattern_analyzer.RawStockDataHolder.load(str(file_path))
 
-    search_tree = stock_pattern_analyzer.SearchTree(data_holder)
-    top_k_indices, top_k_distances = search_tree.search_most_recent(ticker=args.ticker, k=args.top_k)
+    search_tree = stock_pattern_analyzer.SearchTree(data_holder=data_holder, window_size=args.window_size)
+    search_tree.build_search_tree()
+
+    label = data_holder.symbol_to_label[args.ticker]
+    most_recent_values = data_holder.values[label][:search_tree.window_size]
+    top_k_indices, top_k_distances = search_tree.search(values=most_recent_values, k=args.top_k)
 
     predictions = []
 
+    print(f"Forecast with a future length of {search_tree.window_size}")
+    print("-" * 30)
+
     for index, distance in zip(top_k_indices, top_k_distances):
-        ticker = data_holder.get_ticker_symbol(index)
-        window_norm_values = data_holder.get_window(index)
-        start_date, end_date = data_holder.get_date(index)
-        start_date = stock_pattern_analyzer.date_to_str(start_date)
-        end_date = stock_pattern_analyzer.date_to_str(end_date)
+        ticker = search_tree.get_window_symbol(index)
+        start_date, end_date = search_tree.get_start_end_date(index)
 
-        print(f"Match with {ticker} (distance: {distance:.2f}), from {end_date} to {start_date}")
+        start_date_str = stock_pattern_analyzer.date_to_str(start_date)
+        end_date_str = stock_pattern_analyzer.date_to_str(end_date)
+        print(f"Match with {ticker} (distance: {distance:.2f}), from {end_date_str} to {start_date_str}")
 
-        window_with_future_values, window_with_future_dates = data_holder.get_window_with_future(index=index,
-                                                                                                 future_size=args.future_window_size,
-                                                                                                 normalize=False)
+        window_with_future_values = search_tree.get_window_values(index=index,
+                                                                  future_length=args.future_window_size)
         todays_value = window_with_future_values[-args.window_size]
         future_value = window_with_future_values[0]
         diff_from_today = todays_value - future_value
@@ -67,4 +72,4 @@ if __name__ == "__main__":
     if pred > 0.5:
         print(f"\nBullish with {pred * 100:.0f}% chance")
     else:
-        print(f"\nBearish with {(1 - pred) * 100:.0f}% change")
+        print(f"\nBearish with {(1 - pred) * 100:.0f}% chance")
