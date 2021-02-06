@@ -1,7 +1,9 @@
 from sklearn.neighbors import KDTree
 
 from .data import RawStockDataHolder
+from datetime import datetime
 import numpy as np
+import pickle
 
 MINIMUM_WINDOW_SIZE = 5
 
@@ -99,3 +101,24 @@ class SearchTree:
     def get_start_end_date(self, index: int, future_length: int = 0) -> tuple:
         dates = self.get_window_dates(index, future_length)
         return dates[0], dates[-1]
+
+    def create_filename_for_today(self) -> str:
+        current_date = datetime.now().strftime("%Y_%m_%d")
+        file_name = f"search_tree_{self.window_size}win_{current_date}.pk"
+        return file_name
+
+    def serialize(self) -> str:
+        if not self.is_built:
+            raise ValueError("You need to build the tree first")
+
+        file_name = self.create_filename_for_today()
+        with open(file_name, "wb") as f:
+            pickle.dump(self, f)
+
+        return file_name
+
+    @staticmethod
+    def load(file_name: str) -> "SearchTree":
+        with open(file_name, "rb") as f:
+            obj = pickle.load(f)
+        return obj

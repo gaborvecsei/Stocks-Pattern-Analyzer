@@ -21,11 +21,9 @@ def parse_args():
     return args
 
 
-if __name__ == "__main__":
-    args = parse_args()
-
-    data_holder = stock_pattern_analyzer.RawStockDataHolder(ticker_symbols=DEFAULT_TICKERS,
-                                                            period_years=args.period_years,
+def initialize_data_holder(tickers: list, period_years: int):
+    data_holder = stock_pattern_analyzer.RawStockDataHolder(ticker_symbols=tickers,
+                                                            period_years=period_years,
                                                             interval=1)
 
     file_path = Path(data_holder.create_filename_for_today())
@@ -35,9 +33,27 @@ if __name__ == "__main__":
         data_holder.serialize()
     else:
         data_holder = stock_pattern_analyzer.RawStockDataHolder.load(str(file_path))
+    return data_holder
 
-    search_tree = stock_pattern_analyzer.SearchTree(data_holder=data_holder, window_size=args.window_size)
-    search_tree.build_search_tree()
+
+def initialize_search_tree(data_holder: stock_pattern_analyzer.RawStockDataHolder, window_size: int):
+    search_tree = stock_pattern_analyzer.SearchTree(data_holder=data_holder, window_size=window_size)
+
+    file_path = Path(search_tree.create_filename_for_today())
+
+    if not file_path.exists():
+        search_tree.build_search_tree()
+        search_tree.serialize()
+    else:
+        search_tree = stock_pattern_analyzer.SearchTree.load(str(file_path))
+    return search_tree
+
+
+if __name__ == "__main__":
+    args = parse_args()
+
+    data_holder = initialize_data_holder(tickers=DEFAULT_TICKERS, period_years=args.period_years)
+    search_tree = initialize_search_tree(data_holder=data_holder, window_size=args.window_size)
 
     label = data_holder.symbol_to_label[args.ticker]
     most_recent_values = data_holder.values[label][:search_tree.window_size]
