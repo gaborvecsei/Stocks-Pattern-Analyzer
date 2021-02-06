@@ -2,9 +2,12 @@
 
 ## TODOs
 
-- Window normalization (vectorized)
+- Window MinMax scaling (vectorized)
 - Visualization
-- SearchTree serialization
+- Measure the effect of window transformations
+    - MinMax scaling
+    - Softmax
+    - No transform
 - RestAPI creation (FastAPI)
 - Dockerized service(s)
 - Common base class for serializable objects

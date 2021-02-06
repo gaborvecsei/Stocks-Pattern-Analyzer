@@ -1,6 +1,7 @@
 from sklearn.neighbors import KDTree
 
 from .data import RawStockDataHolder
+from sklearn.preprocessing import minmax_scale
 from datetime import datetime
 import numpy as np
 import pickle
@@ -49,8 +50,8 @@ class SearchTree:
         self.start_end_indices_in_original_array = np.array(self.start_end_indices_in_original_array)
         self.labels = np.array(self.labels)
         windows = np.array(windows)
-        # TODO: normalize every window
-        # norm_windows = normalize(windows)
+        # TODO: normalize or softmax or other?
+        windows = minmax_scale(windows, feature_range=(0, 1), axis=1)
         return windows
 
     def build_search_tree(self):
