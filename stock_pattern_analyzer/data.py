@@ -4,7 +4,7 @@ from datetime import datetime
 import numpy as np
 import yfinance
 from tqdm import tqdm
-
+from pathlib import Path
 from . import utils
 
 
@@ -43,7 +43,7 @@ class RawStockDataHolder:
 
     def create_filename_for_today(self) -> str:
         current_date = datetime.now().strftime("%Y_%m_%d")
-        file_name = f"{self.period_years}y_{self.interval}d_{current_date}.pk"
+        file_name = f"data_holder_{self.period_years}y_{self.interval}d_{current_date}.pk"
         return file_name
 
     def serialize(self) -> str:
@@ -61,3 +61,18 @@ class RawStockDataHolder:
         with open(file_name, "rb") as f:
             obj = pickle.load(f)
         return obj
+
+
+def initialize_data_holder(tickers: list, period_years: int, force_update: bool = False):
+    data_holder = RawStockDataHolder(ticker_symbols=tickers,
+                                     period_years=period_years,
+                                     interval=1)
+
+    file_path = Path(data_holder.create_filename_for_today())
+
+    if (not file_path.exists()) or force_update:
+        data_holder.fill()
+        data_holder.serialize()
+    else:
+        data_holder = RawStockDataHolder.load(str(file_path))
+    return data_holder

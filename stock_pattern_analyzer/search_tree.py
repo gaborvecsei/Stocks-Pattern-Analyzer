@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from sklearn.neighbors import KDTree
 
 from .data import RawStockDataHolder
@@ -50,7 +52,6 @@ class SearchTree:
         self.start_end_indices_in_original_array = np.array(self.start_end_indices_in_original_array)
         self.labels = np.array(self.labels)
         windows = np.array(windows)
-        # TODO: normalize or softmax or other?
         windows = minmax_scale(windows, feature_range=(0, 1), axis=1)
         return windows
 
@@ -63,6 +64,7 @@ class SearchTree:
         if not self.is_built:
             raise ValueError("You need to build teh search tree first")
 
+        values = minmax_scale(values, feature_range=(0, 1))
         if len(values.shape) == 1:
             values = values.reshape(1, -1)
 
@@ -123,3 +125,16 @@ class SearchTree:
         with open(file_name, "rb") as f:
             obj = pickle.load(f)
         return obj
+
+
+def initialize_search_tree(data_holder: RawStockDataHolder, window_size: int, force_update: bool = False):
+    search_tree = SearchTree(data_holder=data_holder, window_size=window_size)
+
+    file_path = Path(search_tree.create_filename_for_today())
+
+    if (not file_path.exists()) or force_update:
+        search_tree.build_search_tree()
+        search_tree.serialize()
+    else:
+        search_tree = SearchTree.load(str(file_path))
+    return search_tree
