@@ -4,139 +4,75 @@ from datetime import datetime
 import numpy as np
 import yfinance
 from tqdm import tqdm
-
+from pathlib import Path
 from . import utils
 
 
-class DataHolder:
-    def __init__(self, tickers: list, window_size: int, period_years: int = 5, interval: int = 1):
-        self.tickers = tickers
-        if window_size <= 3:
-            raise ValueError("Window size should be bigger than 3")
-        self.window_size = window_size
+class RawStockDataHolder:
+    def __init__(self, ticker_symbols: list, period_years: int = 5, interval: int = 1):
+        self.ticker_symbols = ticker_symbols
         self.period_years = period_years
         self.interval = interval
 
-        # max values are calculated = years * interval days * 365
-        self._max_values_per_stock = self.period_years * self.interval * 365
+        max_values_per_stock = self.period_years * self.interval * 365
+        nb_ticker_symbols = len(self.ticker_symbols)
 
-        # Max number of windows = number of years * days in a year * number of tickers
-        self._max_nb_windows = (self._max_values_per_stock * len(self.tickers))
+        self.dates = np.zeros((nb_ticker_symbols, max_values_per_stock))
+        self.values = np.zeros((nb_ticker_symbols, max_values_per_stock), dtype=np.float16)
+        self.nb_of_valid_values = np.zeros(nb_ticker_symbols, dtype=np.int32)
 
-        # This holds the original values
-        self.ticker_original_values = np.zeros((len(self.tickers), self._max_values_per_stock), dtype=np.float16)
+        self.symbol_to_label = {symbol: label for label, symbol in enumerate(ticker_symbols)}
+        self.label_to_symbol = {label: symbol for symbol, label in self.symbol_to_label.items()}
 
-        # This holds all the dates from the original dataframe
-        self.ticker_original_dates = []
+        self.is_filled = False
 
-        # This holds the normalized values of the selected window from a stock
-        self.ticker_windows_norm = np.zeros((self._max_nb_windows, self.window_size), dtype=np.float16)
+    def fill(self) -> None:
+        for symbol in tqdm(self.ticker_symbols):
+            ticker = yfinance.Ticker(symbol)
+            ticker_df = ticker.history(period=f"{self.period_years}y", interval=f"{self.interval}d")[::-1]
 
-        # This holds the start and end indices from a dataframe
-        self.ticker_window_indices = np.zeros((self._max_nb_windows, 2), dtype=np.uint16)
-
-        # Here we store the windows start and end dates
-        self.ticker_window_dates = []
-
-        # This holds which ticker the window belongs to (ticker is encoded with it's index in the list)
-        self.window_labels = np.zeros(self._max_nb_windows, dtype=np.uint8)
-
-        # As we are pre-allocating arrays, with this we can crop the unnecessary part which does not contain data
-        self._useful_data_mask = np.zeros(self._max_nb_windows, dtype=bool)
-
-        # This dict will hold the label to ticker mapping
-        self.ticker_to_label = {}
-        self.label_to_ticker = None
-
-        # This gives back if the holder is filled with data or not
-        self.is_data_downloaded = False
-
-    def fill_data(self):
-        row_index = 0
-
-        for label, ticker in enumerate(tqdm(self.tickers)):
-            # Df is reversed so the most recent values are at the top
-            ticker_df = yfinance.Ticker(ticker).history(period=f"{self.period_years}y", interval=f"{self.interval}d")[
-                        ::-1]
             close_values = ticker_df["Close"].values
+            dates = ticker_df.index.values
 
-            self.ticker_original_values[label, :len(close_values)] = close_values
-            self.ticker_to_label[ticker] = label
+            label = self.symbol_to_label[symbol]
+            self.values[label, :len(close_values)] = close_values
+            self.dates[label, :len(dates)] = dates
+            self.nb_of_valid_values[label] = len(dates)
 
-            self.ticker_original_dates.append(ticker_df.index.values)
+        self.is_filled = True
 
-            for i in range(0, len(ticker_df) - self.window_size, 1):
-                start_index = i
-                end_index = i + self.window_size
-                norm_values = utils.min_max_scale(close_values[start_index:end_index])
-                start_date = ticker_df.index.values[start_index]
-                end_date = ticker_df.index.values[end_index]
-
-                self.ticker_window_indices[row_index, :] = [start_index, end_index]
-                self.ticker_window_dates.append([start_date, end_date])
-                self.ticker_windows_norm[row_index, :] = norm_values
-                self.window_labels[row_index] = label
-                self._useful_data_mask[row_index] = 1
-
-                row_index += 1
-
-        self.ticker_windows_norm = self.ticker_windows_norm[self._useful_data_mask]
-        self.window_labels = self.window_labels[self._useful_data_mask]
-        self.ticker_window_indices = self.ticker_window_indices[self._useful_data_mask]
-        self.ticker_window_dates = np.array(self.ticker_window_dates)
-        # self.ticker_original_dates = np.array(self.ticker_original_dates)
-
-        self.label_to_ticker = {v: k for k, v in self.ticker_to_label.items()}
-
-        self.is_data_downloaded = True
-
-    def get_date(self, index: int):
-        start, end = self.ticker_window_dates[index]
-        return start, end
-
-    def get_ticker_label(self, index):
-        return self.window_labels[index]
-
-    def get_ticker_symbol(self, index: int):
-        return self.label_to_ticker[self.get_ticker_label((index))]
-
-    def get_window(self, index: int):
-        return self.ticker_windows_norm[index]
-
-    def get_window_with_future(self, index: int, future_size: int, normalize: bool = False) -> tuple:
-        ticker_label = self.get_ticker_label(index)
-        start_index, end_index = self.ticker_window_indices[index]
-
-        start_index -= future_size
-        if start_index < 0:
-            start_index = 0
-
-        dates = self.ticker_original_dates[ticker_label][start_index:end_index]
-
-        values = self.ticker_original_values[ticker_label][start_index:end_index]
-        if normalize:
-            values = utils.min_max_scale(values)
-        return values, dates
-
-    def create_filename_for_today(self):
+    def create_filename_for_today(self) -> str:
         current_date = datetime.now().strftime("%Y_%m_%d")
-        file_name = f"{self.period_years}y_{self.interval}d_{self.window_size}win_{current_date}.pk"
+        file_name = f"data_holder_{self.period_years}y_{self.interval}d_{current_date}.pk"
         return file_name
 
-    def serialize(self, file_name: str = None):
-        if not self.is_data_downloaded:
+    def serialize(self) -> str:
+        if not self.is_filled:
             raise ValueError("You need to fill the class with data first")
 
-        if file_name is None:
-            file_name = self.create_filename_for_today()
-
+        file_name = self.create_filename_for_today()
         with open(file_name, "wb") as f:
             pickle.dump(self, f)
 
         return file_name
 
     @staticmethod
-    def load(file_name: str) -> "DataHolder":
+    def load(file_name: str) -> "RawStockDataHolder":
         with open(file_name, "rb") as f:
             obj = pickle.load(f)
         return obj
+
+
+def initialize_data_holder(tickers: list, period_years: int, force_update: bool = False):
+    data_holder = RawStockDataHolder(ticker_symbols=tickers,
+                                     period_years=period_years,
+                                     interval=1)
+
+    file_path = Path(data_holder.create_filename_for_today())
+
+    if (not file_path.exists()) or force_update:
+        data_holder.fill()
+        data_holder.serialize()
+    else:
+        data_holder = RawStockDataHolder.load(str(file_path))
+    return data_holder

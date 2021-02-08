@@ -2,3 +2,9 @@ numpy
 yfinance
 pandas
 tqdm
+fastapi
+dash
+plotly
+matplotlib
+fastapi
+pydantic
