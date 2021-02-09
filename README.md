@@ -1,5 +1,9 @@
 # Stocks Pattern Analyzer
 
+- Start `Rest API`
+- Start `Dash App`
+- Enjoy
+
 ## TODOs
 
 - Window MinMax scaling (vectorized)

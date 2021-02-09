@@ -13,7 +13,7 @@ app.data_holder = None
 app.search_tree_dict = {}
 
 AVAILABLE_SEARCH_WINDOW_SIZES = [5, 10, 15, 20]
-DEFAULT_TICKER_LIST = ["AAPL", "GME", "AMC", "TSLA"]
+TICKER_LIST = ["AAPL", "GME", "AMC", "TSLA"]
 PERIOD_YEARS = 5
 
 
@@ -28,7 +28,7 @@ def root():
 
 @app.get("/data/prepare")
 def prepare_data(force_update: bool = False):
-    app.data_holder = spa.initialize_data_holder(tickers=DEFAULT_TICKER_LIST, period_years=PERIOD_YEARS,
+    app.data_holder = spa.initialize_data_holder(tickers=TICKER_LIST, period_years=PERIOD_YEARS,
                                                  force_update=force_update)
     return SuccessResponse()
 
@@ -40,6 +40,25 @@ def prepare_search_tree(window_size: int, force_update: bool = False):
     return SuccessResponse()
 
 
+class SearchWindowSizeResponse(BaseModel):
+    sizes: List[int]
+
+
+@app.get("/search/sizes", response_model=SearchWindowSizeResponse)
+def get_available_search_window_sizes():
+    return SearchWindowSizeResponse(sizes=AVAILABLE_SEARCH_WINDOW_SIZES)
+
+
+class AvailableSymbolsResponse(BaseModel):
+    symbols: List[str]
+
+
+@app.get("/data/symbols", response_model=AvailableSymbolsResponse)
+def get_available_symbols():
+    return AvailableSymbolsResponse(symbols=TICKER_LIST)
+
+
+@app.get("/data/symbols")
 class MatchResponse(BaseModel):
     symbol: str
     distance: float
