@@ -7,6 +7,22 @@ import rest_api
 from plotly import graph_objs, subplots
 from sklearn.preprocessing import minmax_scale
 
+BASE_URL = "http://localhost:8001"
+
+
+def get_search_window_sizes() -> list:
+    res = requests.get(f"{BASE_URL}/search/sizes")
+    res = rest_api.SearchWindowSizeResponse.parse_obj(res.json())
+    return res.sizes
+
+
+def search_most_recent(symbol: str, window_size: int, top_k: int, future_size: int) -> rest_api.TopKSearchResponse:
+    url = f"{BASE_URL}/search/recent/?symbol={symbol.upper()}&window_size={window_size}&top_k={top_k}&future_size={future_size}"
+    res = requests.get(url)
+    res = rest_api.TopKSearchResponse.parse_obj(res.json())
+    return res
+
+
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=[external_stylesheets])
 
@@ -14,14 +30,11 @@ page_title = html.H1(children="Stock Patterns")
 page_subtitle = html.Div(children="Find the best matches from historic data")
 
 window_size_dropdown_title = html.Label("Search window size (days)")
-# TODO: get values from restapi
 window_size_dropdown_id = "id-window-size-dropdown"
+window_sizes = get_search_window_sizes()
 window_size_dropdown = dcc.Dropdown(id=window_size_dropdown_id,
-                                    options=[
-                                        {'label': 5, 'value': 5},
-                                        {'label': 10, 'value': 10},
-                                        {'label': 15, 'value': 15}],
-                                    value=5,
+                                    options=[{"label": f"{x} days", "value": x} for x in window_sizes],
+                                    value=window_sizes[0],
                                     style={"width": "50%"})
 window_size_div = html.Div(children=[window_size_dropdown_title, window_size_dropdown])
 
@@ -65,9 +78,10 @@ app.layout = html.Div(
 def submit_button_pressed(symbol_value, window_size_value, future_size, top_k):
     fig = graph_objs.Figure()
     try:
-        ret = requests.get(
-            f"http://localhost:8001/search/recent/?symbol={symbol_value}&window_size={window_size_value}&top_k={top_k}&future_size={future_size}").json()
-        ret = rest_api.TopKSearchResponse.parse_obj(ret)
+        ret = search_most_recent(symbol=symbol_value,
+                                 window_size=window_size_value,
+                                 top_k=top_k,
+                                 future_size=future_size)
     except Exception:
         return fig
 
