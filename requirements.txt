@@ -8,3 +8,4 @@ plotly
 matplotlib
 fastapi
 pydantic
+apscheduler

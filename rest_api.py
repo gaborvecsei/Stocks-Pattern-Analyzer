@@ -1,64 +1,36 @@
-from enum import Enum
+from pathlib import Path
 from typing import List, Optional
-import uvicorn
 import numpy  as np
-from pydantic import BaseModel
-
-import stock_pattern_analyzer as spa
-
+import uvicorn
 from fastapi import FastAPI, HTTPException, Response
+from pydantic import BaseModel
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from datetime import datetime
+import stock_pattern_analyzer as spa
 
 app = FastAPI()
 app.data_holder = None
 app.search_tree_dict = {}
+app.scheduler = AsyncIOScheduler()
+app.last_refreshed = None
 
 AVAILABLE_SEARCH_WINDOW_SIZES = [5, 10, 15, 20]
 TICKER_LIST = ["AAPL", "GME", "AMC", "TSLA"]
-PERIOD_YEARS = 5
+PERIOD_YEARS = 2
 
 
 class SuccessResponse(BaseModel):
     message: str = "Successful"
 
 
-@app.get("/")
-def root():
-    return Response(content="Welcome to the stock pattern matcher RestAPI")
-
-
-@app.get("/data/prepare")
-def prepare_data(force_update: bool = False):
-    app.data_holder = spa.initialize_data_holder(tickers=TICKER_LIST, period_years=PERIOD_YEARS,
-                                                 force_update=force_update)
-    return SuccessResponse()
-
-
-@app.get("/search/prepare/{window_size}")
-def prepare_search_tree(window_size: int, force_update: bool = False):
-    app.search_tree_dict[window_size] = spa.initialize_search_tree(data_holder=app.data_holder, window_size=window_size,
-                                                                   force_update=force_update)
-    return SuccessResponse()
-
-
 class SearchWindowSizeResponse(BaseModel):
     sizes: List[int]
-
-
-@app.get("/search/sizes", response_model=SearchWindowSizeResponse)
-def get_available_search_window_sizes():
-    return SearchWindowSizeResponse(sizes=AVAILABLE_SEARCH_WINDOW_SIZES)
 
 
 class AvailableSymbolsResponse(BaseModel):
     symbols: List[str]
 
 
-@app.get("/data/symbols", response_model=AvailableSymbolsResponse)
-def get_available_symbols():
-    return AvailableSymbolsResponse(symbols=TICKER_LIST)
-
-
-@app.get("/data/symbols")
 class MatchResponse(BaseModel):
     symbol: str
     distance: float
@@ -79,6 +51,84 @@ class TopKSearchResponse(BaseModel):
     window_size: int
     top_k: int
     future_size: int
+
+
+def find_and_remove_files(folder_path: str, file_pattern: str) -> list:
+    paths = Path(folder_path).glob(file_pattern)
+    for p in paths:
+        p.unlink()
+    return list(paths)
+
+
+class DataRefreshResponse(BaseModel):
+    message: str = "Last (most recent) refresh"
+    date: datetime
+
+
+@app.get("/")
+def root():
+    return Response(content="Welcome to the stock pattern matcher RestAPI")
+
+
+@app.get("/data/prepare", response_model=SuccessResponse)
+def prepare_data(force_update: bool = False):
+    app.data_holder = spa.initialize_data_holder(tickers=TICKER_LIST, period_years=PERIOD_YEARS,
+                                                 force_update=force_update)
+    return SuccessResponse()
+
+
+@app.get("/search/prepare/{window_size}", response_model=SuccessResponse)
+def prepare_search_tree(window_size: int, force_update: bool = False):
+    app.search_tree_dict[window_size] = spa.initialize_search_tree(data_holder=app.data_holder, window_size=window_size,
+                                                                   force_update=force_update)
+    return SuccessResponse()
+
+
+@app.get("/search/prepare", response_model=SuccessResponse)
+def prepare_all_search_trees(force_update: bool = False):
+    for w in AVAILABLE_SEARCH_WINDOW_SIZES:
+        prepare_search_tree(window_size=w, force_update=force_update)
+    return SuccessResponse()
+
+
+@app.get("/data/refresh", response_model=SuccessResponse)
+def refresh_data():
+    # TODO: hardcoded file prefix and folder
+    find_and_remove_files(".", "data_holder_*.pk")
+    prepare_data()
+    return SuccessResponse(message=f"Existing data holder files removed, and a new one is created")
+
+
+@app.get("/search/refresh", response_model=SuccessResponse)
+def refresh_search():
+    # TODO: hardcoded file prefix and folder
+    find_and_remove_files(".", "search_tree_*.pk")
+    prepare_all_search_trees()
+    return SuccessResponse()
+
+
+@app.get("/refresh", response_model=SuccessResponse)
+def refresh_everything():
+    refresh_data()
+    refresh_search()
+    app.last_refreshed = datetime.now()
+    print("asdasd")
+    return SuccessResponse()
+
+
+@app.get("/refresh/when", response_model=DataRefreshResponse)
+def when_was_data_refreshed():
+    return DataRefreshResponse(date=app.last_refreshed)
+
+
+@app.get("/search/sizes", response_model=SearchWindowSizeResponse)
+def get_available_search_window_sizes():
+    return SearchWindowSizeResponse(sizes=AVAILABLE_SEARCH_WINDOW_SIZES)
+
+
+@app.get("/data/symbols", response_model=AvailableSymbolsResponse)
+def get_available_symbols():
+    return AvailableSymbolsResponse(symbols=TICKER_LIST)
 
 
 @app.get("/search/recent/", response_model=TopKSearchResponse)
@@ -145,9 +195,17 @@ async def search_most_recent(symbol: str, window_size: int = 5, top_k: int = 5, 
     return top_k_match
 
 
-if __name__ == "__main__":
-    prepare_data()
-    for win_size in AVAILABLE_SEARCH_WINDOW_SIZES:
-        prepare_search_tree(win_size)
+@app.on_event("startup")
+def startup_event():
+    # Download and prepare new data when app starts
+    refresh_everything()
 
+    # Refresh data after every market close
+    # TODO: set the timezones and add multiple refresh jobs for the multiple market closes
+    app.scheduler.add_job(func=refresh_everything, trigger="cron", day="*", hour=8, minute=35)
+    app.scheduler.add_job(func=refresh_everything, trigger="cron", day="*", hour=15, minute=35)
+    app.scheduler.start()
+
+
+if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8001)
