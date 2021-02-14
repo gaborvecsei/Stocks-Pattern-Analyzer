@@ -1,12 +1,14 @@
+from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+
 import numpy  as np
 import uvicorn
-from fastapi import FastAPI, HTTPException, Response
-from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from datetime import datetime
+from fastapi import FastAPI, HTTPException, Response
+
 import stock_pattern_analyzer as spa
+from rest_api_models import (SuccessResponse, DataRefreshResponse, TopKSearchResponse, AvailableSymbolsResponse,
+                             SearchWindowSizeResponse, MatchResponse)
 
 app = FastAPI()
 app.data_holder = None
@@ -19,50 +21,11 @@ TICKER_LIST = ["AAPL", "GME", "AMC", "TSLA"]
 PERIOD_YEARS = 2
 
 
-class SuccessResponse(BaseModel):
-    message: str = "Successful"
-
-
-class SearchWindowSizeResponse(BaseModel):
-    sizes: List[int]
-
-
-class AvailableSymbolsResponse(BaseModel):
-    symbols: List[str]
-
-
-class MatchResponse(BaseModel):
-    symbol: str
-    distance: float
-    start_date: str
-    end_date: str
-    todays_value: Optional[float]
-    future_value: Optional[float]
-    change: Optional[float]
-    values: Optional[List[float]]
-
-
-class TopKSearchResponse(BaseModel):
-    matches: List[MatchResponse] = []
-    forecast_type: str
-    forecast_confidence: float
-    anchor_symbol: str
-    anchor_values: Optional[List[float]]
-    window_size: int
-    top_k: int
-    future_size: int
-
-
 def find_and_remove_files(folder_path: str, file_pattern: str) -> list:
     paths = Path(folder_path).glob(file_pattern)
     for p in paths:
         p.unlink()
     return list(paths)
-
-
-class DataRefreshResponse(BaseModel):
-    message: str = "Last (most recent) refresh"
-    date: datetime
 
 
 @app.get("/")
@@ -112,7 +75,6 @@ def refresh_everything():
     refresh_data()
     refresh_search()
     app.last_refreshed = datetime.now()
-    print("asdasd")
     return SuccessResponse()
 
 
@@ -145,7 +107,10 @@ async def search_most_recent(symbol: str, window_size: int = 5, top_k: int = 5, 
     except KeyError:
         raise HTTPException(status_code=400, detail=f"No prepared {window_size} day search window")
 
-    top_k_indices, top_k_distances = search_tree.search(values=most_recent_values, k=top_k)
+    top_k_indices, top_k_distances = search_tree.search(values=most_recent_values, k=top_k + 1)
+    # We need to discard the first item, as that is our search sequence
+    top_k_indices = top_k_indices[1:]
+    top_k_distances = top_k_distances[1:]
 
     forecast_values = []
     matches = []
