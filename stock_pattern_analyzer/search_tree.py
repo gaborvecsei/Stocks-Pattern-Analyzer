@@ -1,12 +1,12 @@
+import pickle
+from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 from sklearn.neighbors import KDTree
+from sklearn.preprocessing import minmax_scale
 
 from .data import RawStockDataHolder
-from sklearn.preprocessing import minmax_scale
-from datetime import datetime
-import numpy as np
-import pickle
 
 MINIMUM_WINDOW_SIZE = 5
 

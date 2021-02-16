@@ -1,12 +1,10 @@
 import pickle
 from datetime import datetime
-import tempfile
+from pathlib import Path
 
 import numpy as np
 import yfinance
 from tqdm import tqdm
-from pathlib import Path
-from . import utils
 
 
 class RawStockDataHolder:
