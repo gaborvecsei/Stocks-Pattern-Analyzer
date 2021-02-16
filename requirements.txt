@@ -10,3 +10,4 @@ fastapi
 pydantic
 apscheduler
 uvicorn
+scikit-learn
