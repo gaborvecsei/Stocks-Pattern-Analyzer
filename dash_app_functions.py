@@ -1,10 +1,11 @@
 import requests
+import os
 
 import stock_pattern_analyzer as spa
 from rest_api_models import (TopKSearchResponse, SearchWindowSizeResponse, DataRefreshResponse,
                              AvailableSymbolsResponse)
 
-BASE_URL = "http://localhost:8001"
+BASE_URL = os.environ.get("REST_API_URL", default="http://localhost:8001")
 
 
 def get_search_window_sizes() -> list:

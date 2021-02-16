@@ -6,6 +6,7 @@ from dash.dependencies import Input, Output
 from dash_app_functions import get_search_window_sizes, visualize_graph, get_symbols
 
 app = Dash(__name__, meta_tags=[{"name": "viewport", "content": "width=device-width"}])
+server = app.server
 
 ##### Header #####
 

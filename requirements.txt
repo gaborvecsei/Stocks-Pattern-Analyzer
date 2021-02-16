@@ -11,3 +11,4 @@ pydantic
 apscheduler
 uvicorn
 scikit-learn
+gunicorn
