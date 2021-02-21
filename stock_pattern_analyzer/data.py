@@ -28,7 +28,12 @@ class RawStockDataHolder:
     def fill(self) -> None:
         for symbol in tqdm(self.ticker_symbols):
             ticker = yfinance.Ticker(symbol)
-            ticker_df = ticker.history(period=f"{self.period_years}y", interval=f"{self.interval}d")[::-1]
+            period_str = f"{self.period_years}y"
+            interval_str = f"{self.interval}d"
+            ticker_df = ticker.history(period=period_str, interval=interval_str, rounding=True)[::-1]
+            if ticker_df.empty or len(ticker_df) == 0:
+                self.ticker_symbols.remove(symbol)
+                continue
 
             close_values = ticker_df["Close"].values
             dates = ticker_df.index.values

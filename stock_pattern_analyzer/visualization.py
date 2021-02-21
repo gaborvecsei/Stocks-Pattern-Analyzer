@@ -15,7 +15,8 @@ def visualize_graph(match_values_list: List[np.ndarray],
                     window_size: int,
                     future_size: int,
                     anchor_symbol: str,
-                    anchor_values: np.ndarray):
+                    anchor_values: np.ndarray,
+                    show_legend: bool = True) -> graph_objs.Figure:
     fig = graph_objs.Figure()
 
     assert len(match_values_list) == len(match_symbols), "Something is fishy"
@@ -30,7 +31,7 @@ def visualize_graph(match_values_list: List[np.ndarray],
         minmax_values = minmax_scale(original_values)
         trace = graph_objs.Scatter(x=x,
                                    y=minmax_values,
-                                   name=f"{i}) {match_symbol} ({match_start_date}-{match_end_date})",
+                                   name=f"{i}) {match_symbol} ({match_start_date} - {match_end_date})",
                                    mode="lines",
                                    line=dict(color=VALUES_COLOR),
                                    opacity=1 / (i + 1),
@@ -52,8 +53,8 @@ def visualize_graph(match_values_list: List[np.ndarray],
 
     fig.add_vline(x=window_size, line_dash="dash", line_color="black", annotation_text="Last market close")
 
-    fig.update_xaxes(showspikes=True, spikecolor="black", spikesnap="cursor", spikemode="across")
-    fig.update_yaxes(showspikes=True, spikecolor="black", spikethickness=1)
+    # fig.update_xaxes(showspikes=True, spikecolor="black", spikesnap="cursor", spikemode="across")
+    # fig.update_yaxes(showspikes=True, spikecolor="black", spikethickness=1)
 
     x_axis_ticker_labels = list(range(-window_size, future_size + 1))
     fig.update_layout(title=f"Similar patters for {anchor_symbol} based on historical market close data",
@@ -66,6 +67,7 @@ def visualize_graph(match_values_list: List[np.ndarray],
                       autosize=True,
                       plot_bgcolor=FIG_BG_COLOR,
                       paper_bgcolor=FIG_BG_COLOR,
-                      legend=dict(font=dict(size=9), orientation="h"))
+                      legend=dict(font=dict(size=9), orientation="h", yanchor="bottom", y=-0.5),
+                      showlegend=show_legend)
 
     return fig

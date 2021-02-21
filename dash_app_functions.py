@@ -1,7 +1,7 @@
-import requests
 import os
 
-import stock_pattern_analyzer as spa
+import requests
+
 from rest_api_models import (TopKSearchResponse, SearchWindowSizeResponse, DataRefreshResponse,
                              AvailableSymbolsResponse)
 
@@ -33,29 +33,3 @@ def get_last_refresh_date() -> str:
     res = DataRefreshResponse.parse_obj(res)
     date_str = res.date.strftime("%Y/%m/%d, %H:%M:%S")
     return date_str
-
-
-def visualize_graph(symbol: str, window_size: int, future_size: int, top_k: int):
-    try:
-        ret = search_most_recent(symbol=symbol,
-                                 window_size=window_size,
-                                 top_k=top_k,
-                                 future_size=future_size)
-        values = []
-        symbols = []
-        dates = []
-        for m in ret.matches:
-            values.append(m.values)
-            symbols.append(m.symbol)
-            dates.append((m.start_date, m.end_date))
-
-        fig = spa.visualize_graph(match_values_list=values,
-                                  match_symbols=symbols,
-                                  match_str_dates=dates,
-                                  window_size=window_size,
-                                  future_size=future_size,
-                                  anchor_symbol=ret.anchor_symbol,
-                                  anchor_values=ret.anchor_values)
-        return fig
-    except Exception:
-        return None

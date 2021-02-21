@@ -2,6 +2,7 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy  as np
+import pandas as pd
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Response
@@ -16,8 +17,20 @@ app.search_tree_dict = {}
 app.scheduler = AsyncIOScheduler()
 app.last_refreshed = None
 
-AVAILABLE_SEARCH_WINDOW_SIZES = [5, 10, 15, 20]
-TICKER_LIST = ["AAPL", "GME", "AMC", "TSLA"]
+
+def get_sp500_ticker_list() -> set:
+    table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
+    df = table[0]
+    return set(df["Symbol"].values)
+
+
+AVAILABLE_SEARCH_WINDOW_SIZES = list(range(5, 16, 1)) + [20, 25, 30, 45]
+TICKER_LIST = ["AAPL", "GME", "AMC", "TSLA", "hff"]
+# TICKER_LIST = {"AAPL", "MSFT", "AMZN", "BABA", "ROKU", "TDOC", "CRSP", "SQ", "NVTA", "Z", "BIDU", "SPOT", "PRLB",
+#                "TSLA", "GME", "BB", "AMC", "LI", "NIO"}
+# # TODO: handle if symbol is missing + parallell download
+# TICKER_LIST = TICKER_LIST.union(get_sp500_ticker_list())
+TICKER_LIST = sorted(TICKER_LIST)
 PERIOD_YEARS = 2
 
 
