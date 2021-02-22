@@ -44,7 +44,7 @@ window_size_dropdown = dcc.Dropdown(id=window_size_dropdown_id,
                                     className="dcc_control")
 
 future_size_input_id = "id-future-size-input"
-future_size_input = dcc.Input(id=future_size_input_id, type="number", min=0, max=28, value=5, className="dcc_control")
+future_size_input = dcc.Input(id=future_size_input_id, type="number", min=0, max=25, value=5, className="dcc_control")
 
 top_k_input_id = "id-top-k-input"
 top_k_input = dcc.Input(id=top_k_input_id, type="number", min=0, max=25, value=5, className="dcc_control")
@@ -53,9 +53,9 @@ settings_div = html.Div([html.P("Symbol", className="control_label"),
                          symbol_dropdown,
                          html.P("Search window size", className="control_label"),
                          window_size_dropdown,
-                         html.P("Future window size", className="control_label"),
+                         html.P("Future window size (max. 25)", className="control_label"),
                          future_size_input,
-                         html.P("Top-K (max number of patterns to match)", className="control_label"),
+                         html.P("Patterns to match (max. 25)", className="control_label"),
                          top_k_input],
                         className="pretty_container three columns",
                         id="id-settings-div")
@@ -80,9 +80,9 @@ matched_div = html.Div([html.Div([html.H6("Matched patterns"), table],
 
 ##### Reference Links #####
 
-css_link = dcc.Link("[1] Style of the page (css)",
-                    href="https://github.com/plotly/dash-sample-apps/tree/master/apps/dash-oil-and-gas")
-yahoo_data_link = dcc.Link("[2] Yahoo data", href="https://finance.yahoo.com")
+css_link = html.A("[1] Style of the page (css)",
+                  href="https://github.com/plotly/dash-sample-apps/tree/master/apps/dash-oil-and-gas")
+yahoo_data_link = html.A("[2] Yahoo data", href="https://finance.yahoo.com")
 reference_links_div = html.Div([html.Div([html.H6("References"),
                                           css_link,
                                           html.Br(),
