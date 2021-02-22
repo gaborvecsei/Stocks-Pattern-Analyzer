@@ -1,3 +1,4 @@
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Response
 
 import stock_pattern_analyzer as spa
 from rest_api_models import (SuccessResponse, DataRefreshResponse, TopKSearchResponse, AvailableSymbolsResponse,
-                             SearchWindowSizeResponse, MatchResponse)
+                             SearchWindowSizeResponse, MatchResponse, IsReadyResponse)
 
 app = FastAPI()
 app.data_holder = None
@@ -53,6 +54,17 @@ def prepare_data(force_update: bool = False):
     app.data_holder = spa.initialize_data_holder(tickers=TICKER_LIST, period_years=PERIOD_YEARS,
                                                  force_update=force_update)
     return SuccessResponse()
+
+
+@app.get("/is_ready", response_model=IsReadyResponse)
+def is_read():
+    if app.data_holder is None or app.data_holder.is_filled:
+        return IsReadyResponse(is_ready=False)
+
+    if len(app.search_tree_dict) == 0:
+        return IsReadyResponse(is_ready=False)
+
+    return IsReadyResponse(is_ready=True)
 
 
 @app.get("/search/prepare/{window_size}", response_model=SuccessResponse)
@@ -178,7 +190,8 @@ async def search_most_recent(symbol: str, window_size: int = 5, top_k: int = 5, 
 @app.on_event("startup")
 def startup_event():
     # Download and prepare new data when app starts
-    refresh_everything()
+    # This is started in the bg as app needs to start-up in less than 60secs (for Heroku)
+    threading.Thread(target=refresh_everything).start()
 
     # Refresh data after every market close
     # TODO: set the timezones and add multiple refresh jobs for the multiple market closes

@@ -41,3 +41,7 @@ class TopKSearchResponse(BaseModel):
 class DataRefreshResponse(BaseModel):
     message: str = "Last (most recent) refresh"
     date: datetime
+
+
+class IsReadyResponse(BaseModel):
+    is_ready: bool
