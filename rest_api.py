@@ -31,7 +31,8 @@ AVAILABLE_SEARCH_WINDOW_SIZES = sorted(AVAILABLE_SEARCH_WINDOW_SIZES)
 # TICKER_LIST = ["AAPL", "GME", "AMC", "TSLA", "hff"]
 TICKER_LIST = {"AAPL", "MSFT", "AMZN", "BABA", "ROKU", "TDOC", "CRSP", "SQ", "NVTA", "Z", "BIDU", "SPOT", "PRLB",
                "TSLA", "GME", "BB", "AMC", "LI", "NIO"}
-TICKER_LIST = TICKER_LIST.union(get_sp500_ticker_list())[::2]
+TICKER_LIST = TICKER_LIST.union(get_sp500_ticker_list())
+TICKER_LIST = list(TICKER_LIST)[::2]
 TICKER_LIST = sorted(TICKER_LIST)
 
 PERIOD_YEARS = 2
