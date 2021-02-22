@@ -1,6 +1,8 @@
+import concurrent.futures
 import pickle
 from datetime import datetime
 from pathlib import Path
+from typing import Tuple
 
 import numpy as np
 import yfinance
@@ -25,25 +27,44 @@ class RawStockDataHolder:
 
         self.is_filled = False
 
-    def fill(self) -> None:
-        for symbol in tqdm(self.ticker_symbols):
-            ticker = yfinance.Ticker(symbol)
-            period_str = f"{self.period_years}y"
-            interval_str = f"{self.interval}d"
-            ticker_df = ticker.history(period=period_str, interval=interval_str, rounding=True)[::-1]
-            if ticker_df.empty or len(ticker_df) == 0:
-                self.ticker_symbols.remove(symbol)
-                continue
+    def _get_stock_data_for_symbol(self, symbol: str) -> Tuple[np.ndarray, np.ndarray, int]:
+        ticker = yfinance.Ticker(symbol)
+        period_str = f"{self.period_years}y"
+        interval_str = f"{self.interval}d"
+        ticker_df = ticker.history(period=period_str, interval=interval_str, rounding=True)[::-1]
 
-            close_values = ticker_df["Close"].values
-            dates = ticker_df.index.values
+        if ticker_df.empty or len(ticker_df) == 0:
+            raise ValueError(f"{symbol} does not have enough data")
 
-            label = self.symbol_to_label[symbol]
-            self.values[label, :len(close_values)] = close_values
-            self.dates[label, :len(dates)] = dates
-            self.nb_of_valid_values[label] = len(dates)
+        close_values = ticker_df["Close"].values
+        dates = ticker_df.index.values
+        label = self.symbol_to_label[symbol]
 
+        return close_values, dates, label
+
+    def fill(self):
+        pbar = tqdm(desc="Symbol data download", total=len(self.ticker_symbols))
+
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            future_to_symbol = {}
+            for symbol in self.ticker_symbols:
+                future = pool.submit(self._get_stock_data_for_symbol, symbol=symbol)
+                future_to_symbol[future] = symbol
+
+            for future in concurrent.futures.as_completed(future_to_symbol):
+                completed_symbol = future_to_symbol[future]
+                try:
+                    close_values, dates, label = future.result()
+                    self.values[label, :len(close_values)] = close_values
+                    self.dates[label, :len(dates)] = dates
+                    self.nb_of_valid_values[label] = len(dates)
+                except ValueError as e:
+                    print(f"ERROR with {completed_symbol}: {e}")
+                    continue
+
+                pbar.update(1)
         self.is_filled = True
+        pbar.close()
 
     def create_filename_for_today(self) -> str:
         current_date = datetime.now().strftime("%Y_%m_%d")

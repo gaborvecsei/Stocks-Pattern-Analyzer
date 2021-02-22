@@ -18,7 +18,7 @@ class SearchTree:
         self.window_size = window_size
         self._data_holder = data_holder
 
-        self.kdtree = None
+        self.tree = None
 
         # TODO: solve this more efficiently without wasting memory
         # This stores the start and end indices in the original array of the windows
@@ -57,7 +57,7 @@ class SearchTree:
 
     def build_search_tree(self):
         X = self._create_windows()
-        self.kdtree = KDTree(X)
+        self.tree = KDTree(X, leaf_size=40)
         self.is_built = True
 
     def search(self, values: np.ndarray, k: int = 5) -> tuple:
@@ -68,7 +68,7 @@ class SearchTree:
         if len(values.shape) == 1:
             values = values.reshape(1, -1)
 
-        top_k_distances, top_k_indices = self.kdtree.query(values, k=k)
+        top_k_distances, top_k_indices = self.tree.query(values, k=k)
         top_k_distances = top_k_distances.ravel()
         top_k_indices = top_k_indices.ravel()
 

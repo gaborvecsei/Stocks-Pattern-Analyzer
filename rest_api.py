@@ -25,11 +25,10 @@ def get_sp500_ticker_list() -> set:
 
 
 AVAILABLE_SEARCH_WINDOW_SIZES = list(range(5, 16, 1)) + [20, 25, 30, 45]
-TICKER_LIST = ["AAPL", "GME", "AMC", "TSLA", "hff"]
-# TICKER_LIST = {"AAPL", "MSFT", "AMZN", "BABA", "ROKU", "TDOC", "CRSP", "SQ", "NVTA", "Z", "BIDU", "SPOT", "PRLB",
-#                "TSLA", "GME", "BB", "AMC", "LI", "NIO"}
-# # TODO: handle if symbol is missing + parallell download
-# TICKER_LIST = TICKER_LIST.union(get_sp500_ticker_list())
+# TICKER_LIST = ["AAPL", "GME", "AMC", "TSLA", "hff"]
+TICKER_LIST = {"AAPL", "MSFT", "AMZN", "BABA", "ROKU", "TDOC", "CRSP", "SQ", "NVTA", "Z", "BIDU", "SPOT", "PRLB",
+               "TSLA", "GME", "BB", "AMC", "LI", "NIO"}
+TICKER_LIST = TICKER_LIST.union(get_sp500_ticker_list())
 TICKER_LIST = sorted(TICKER_LIST)
 PERIOD_YEARS = 2
 
