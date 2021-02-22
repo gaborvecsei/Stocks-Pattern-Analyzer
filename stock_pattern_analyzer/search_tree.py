@@ -1,9 +1,9 @@
 import pickle
 from datetime import datetime
 from pathlib import Path
+from scipy.spatial.ckdtree import cKDTree
 
 import numpy as np
-from sklearn.neighbors import KDTree
 from sklearn.preprocessing import minmax_scale
 
 from .data import RawStockDataHolder
@@ -57,7 +57,8 @@ class SearchTree:
 
     def build_search_tree(self):
         X = self._create_windows()
-        self.tree = KDTree(X, leaf_size=40)
+        # self.tree = KDTree(X, leaf_size=40)
+        self.tree = cKDTree(data=X, leafsize=16)
         self.is_built = True
 
     def search(self, values: np.ndarray, k: int = 5) -> tuple:

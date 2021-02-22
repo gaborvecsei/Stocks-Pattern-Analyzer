@@ -12,3 +12,4 @@ apscheduler
 uvicorn
 scikit-learn
 gunicorn
+scipy

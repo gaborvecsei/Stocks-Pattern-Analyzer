@@ -2,7 +2,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-import numpy  as np
+import numpy as np
 import pandas as pd
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -25,7 +25,7 @@ def get_sp500_ticker_list() -> set:
     return set(df["Symbol"].values)
 
 
-AVAILABLE_SEARCH_WINDOW_SIZES = list(range(6, 17, 2)) + [5, 20, 25, 30, 45]
+AVAILABLE_SEARCH_WINDOW_SIZES = list(range(6, 17, 2)) + [5, 20, 25]
 AVAILABLE_SEARCH_WINDOW_SIZES = sorted(AVAILABLE_SEARCH_WINDOW_SIZES)
 
 # TICKER_LIST = ["AAPL", "GME", "AMC", "TSLA", "hff"]
