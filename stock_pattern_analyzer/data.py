@@ -19,7 +19,7 @@ class RawStockDataHolder:
         nb_ticker_symbols = len(self.ticker_symbols)
 
         self.dates = np.zeros((nb_ticker_symbols, max_values_per_stock))
-        self.values = np.zeros((nb_ticker_symbols, max_values_per_stock), dtype=np.float16)
+        self.values = np.zeros((nb_ticker_symbols, max_values_per_stock), dtype=np.float32)
         self.nb_of_valid_values = np.zeros(nb_ticker_symbols, dtype=np.int32)
 
         self.symbol_to_label = {symbol: label for label, symbol in enumerate(ticker_symbols)}

@@ -28,13 +28,12 @@ def get_sp500_ticker_list() -> set:
 AVAILABLE_SEARCH_WINDOW_SIZES = list(range(6, 17, 2)) + [5, 20, 25, 30, 45]
 AVAILABLE_SEARCH_WINDOW_SIZES = sorted(AVAILABLE_SEARCH_WINDOW_SIZES)
 
-# TICKER_LIST = ["AAPL", "GME", "AMC", "TSLA", "hff"]
 TICKER_LIST = {"AAPL", "MSFT", "AMZN", "BABA", "ROKU", "TDOC", "CRSP", "SQ", "NVTA", "Z", "BIDU", "SPOT", "PRLB",
                "TSLA", "GME", "BB", "AMC", "LI", "NIO"}
-# TICKER_LIST = TICKER_LIST.union(get_sp500_ticker_list())
+TICKER_LIST = TICKER_LIST.union(get_sp500_ticker_list())
 TICKER_LIST = sorted(TICKER_LIST)
 
-PERIOD_YEARS = 2
+PERIOD_YEARS = 1
 
 
 def find_and_remove_files(folder_path: str, file_pattern: str) -> list:

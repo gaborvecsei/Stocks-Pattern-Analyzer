@@ -4,11 +4,89 @@ from pathlib import Path
 from scipy.spatial.ckdtree import cKDTree
 
 import numpy as np
+import faiss
 from sklearn.preprocessing import minmax_scale
-
+import abc
 from .data import RawStockDataHolder
 
 MINIMUM_WINDOW_SIZE = 5
+
+
+class BaseSearch:
+
+    def __init__(self):
+        self.index = None
+
+    @abc.abstractmethod
+    def create(self, X: np.ndarray):
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def query(self, q: np.ndarray, k: int):
+        raise NotImplementedError()
+
+    # @classmethod
+    # @abc.abstractmethod
+    # def load(cls, file_path: str):
+    #     raise NotImplementedError()
+    #
+    # @abc.abstractmethod
+    # def serialize(self, file_path: str):
+    #     raise NotImplementedError()
+
+
+class FaissSearch(BaseSearch):
+
+    def __init__(self):
+        super().__init__()
+
+    def create(self, X: np.ndarray):
+        d = X.shape[-1]
+        if d % 4 == 0:
+            m = 4
+        elif d % 5 == 0:
+            m = 5
+        elif d % 2 == 0:
+            m = 2
+        else:
+            raise ValueError("This is not handled, can not find a good value for m")
+        quantizer = faiss.IndexFlatL2(d)
+        self.index = faiss.IndexIVFPQ(quantizer, d, 100, m, 8)
+        self.index.train(X)
+        self.index.add(X)
+
+    def query(self, q: np.ndarray, k: int):
+        distances, indices = self.index.search(q, k)
+        return distances[0], indices[0]
+
+    # @classmethod
+    # def load(cls, file_path: str):
+    #     obj = cls()
+    #     obj.index = faiss.read_index(file_path)
+    #     return obj
+    #
+    # def serialize(self, file_path: str):
+    #     faiss.write_index(file_path)
+
+
+class cKDTreeSearch(BaseSearch):
+
+    def __init__(self):
+        super().__init__()
+
+    def create(self, X: np.ndarray):
+        self.index = cKDTree(data=X)
+
+    def query(self, q: np.ndarray, k: int):
+        top_k_distances, top_k_indices = self.index.query(x=q, k=k)
+        return top_k_distances, top_k_indices
+
+    # @classmethod
+    # def load(cls, file_path: str):
+    #     pass
+    #
+    # def serialize(self, file_path: str):
+    #     pass
 
 
 class SearchTree:
@@ -18,7 +96,7 @@ class SearchTree:
         self.window_size = window_size
         self._data_holder = data_holder
 
-        self.tree = None
+        self.index = None
 
         # TODO: solve this more efficiently without wasting memory
         # This stores the start and end indices in the original array of the windows
@@ -53,12 +131,14 @@ class SearchTree:
         self.labels = np.array(self.labels)
         windows = np.array(windows)
         windows = minmax_scale(windows, feature_range=(0, 1), axis=1)
+
+        windows = np.nan_to_num(windows)
         return windows
 
     def build_search_tree(self):
         X = self._create_windows()
-        # self.tree = KDTree(X, leaf_size=40)
-        self.tree = cKDTree(data=X, leafsize=16)
+        self.index = FaissSearch()
+        self.index.create(X.astype(np.float32))
         self.is_built = True
 
     def search(self, values: np.ndarray, k: int = 5) -> tuple:
@@ -68,8 +148,9 @@ class SearchTree:
         values = minmax_scale(values, feature_range=(0, 1))
         if len(values.shape) == 1:
             values = values.reshape(1, -1)
+        values = values.astype(np.float32)
 
-        top_k_distances, top_k_indices = self.tree.query(values, k=k)
+        top_k_distances, top_k_indices = self.index.query(q=values, k=k)
         top_k_distances = top_k_distances.ravel()
         top_k_indices = top_k_indices.ravel()
 
@@ -135,7 +216,8 @@ def initialize_search_tree(data_holder: RawStockDataHolder, window_size: int, fo
 
     if (not file_path.exists()) or force_update:
         search_tree.build_search_tree()
-        search_tree.serialize()
+        # TODO: implement serialization
+        # search_tree.serialize()
     else:
         search_tree = SearchTree.load(str(file_path))
     return search_tree

@@ -13,3 +13,4 @@ uvicorn
 scikit-learn
 gunicorn
 scipy
+faiss-cpu
