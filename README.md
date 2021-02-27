@@ -1,24 +1,16 @@
 # Stocks Pattern Analyzer
 
-- Start `Rest API`
-- Start `Dash App`
-- Enjoy
+<img src="art/homepage.png" width="400" alt="homepage"></a>
 
-## TODOs
+## Run (for debugging)
 
-- Measure the effect of window transformations
-    - MinMax scaling
-    - Softmax
-    - No transform
-- Dockerized service(s)
-- Common base class for serializable objects
+- `python rest_api.py`
+    - Wait until the data creation and search model creation is done (1-2 mins)
+- `python dash_app.py`
+    - The environment variable `$REST_API_URL` controls the connection with the RestAPI. It should be the base URL
+- Enjoy :sunglasses: 
 
-### Optimizations
-
-- Parallel data download
-- Parallel data processing (search tree creation)
-
-## Releasing to Heroku (toy deployment)
+## Deployment to Heroku (toy deployment)
 
 First of all, this is a mono-repo which is not ideal, but the deployment is just an example.
 This is why a multi-buildpack solution is used with `heroku-community/multi-procfile`.
@@ -38,10 +30,15 @@ $ heroku config:set -a stock-dash-client REST_API_URL=https://stock-restapi.hero
 $ git push dash master
 ```
 
-Files:
+Heroku Files:
 - `runtime.txt` describes the Python version
 - `Procfile_restapi` Heroku Procfile for the RestAPI app 
 - `Procfile_dash` Heroku Procfile for the Dash Client app 
+
+## TODOs
+
+- Dockerized service(s)
+- CLI
 
 ## References
 
