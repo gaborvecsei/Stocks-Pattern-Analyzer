@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import psutil
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Response
@@ -77,6 +78,7 @@ def prepare_search_tree(window_size: int, force_update: bool = False):
 def prepare_all_search_trees(force_update: bool = False):
     for w in AVAILABLE_SEARCH_WINDOW_SIZES:
         prepare_search_tree(window_size=w, force_update=force_update)
+        print(f"Search tree with size {w} prepared")
     return SuccessResponse()
 
 
@@ -85,6 +87,7 @@ def refresh_data():
     # TODO: hardcoded file prefix and folder
     find_and_remove_files(".", "data_holder_*.pk")
     prepare_data()
+    print("Data refreshed")
     return SuccessResponse(message=f"Existing data holder files removed, and a new one is created")
 
 
@@ -93,6 +96,7 @@ def refresh_search():
     # TODO: hardcoded file prefix and folder
     find_and_remove_files(".", "search_tree_*.pk")
     prepare_all_search_trees()
+    print("Search trees are refreshed")
     return SuccessResponse()
 
 
@@ -101,6 +105,7 @@ def refresh_everything():
     refresh_data()
     refresh_search()
     app.last_refreshed = datetime.now()
+    print(psutil.virtual_memory())
     return SuccessResponse()
 
 
@@ -120,7 +125,7 @@ def get_available_symbols():
 
 
 @app.get("/search/recent/", response_model=TopKSearchResponse)
-async def search_most_recent(symbol: str, window_size: int = 5, top_k: int = 5, future_size: int = 5):
+def search_most_recent(symbol: str, window_size: int = 5, top_k: int = 5, future_size: int = 5):
     symbol = symbol.upper()
     try:
         label = app.data_holder.symbol_to_label[symbol]
@@ -200,4 +205,5 @@ def startup_event():
 
 
 if __name__ == "__main__":
+    print(psutil.virtual_memory())
     uvicorn.run(app, host="0.0.0.0", port=8001)

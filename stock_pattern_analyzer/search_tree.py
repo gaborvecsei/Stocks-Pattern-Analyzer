@@ -1,12 +1,13 @@
+import abc
 import pickle
 from datetime import datetime
 from pathlib import Path
-from scipy.spatial.ckdtree import cKDTree
 
-import numpy as np
 import faiss
+import numpy as np
+from scipy.spatial.ckdtree import cKDTree
 from sklearn.preprocessing import minmax_scale
-import abc
+
 from .data import RawStockDataHolder
 
 MINIMUM_WINDOW_SIZE = 5
@@ -138,6 +139,7 @@ class SearchTree:
     def build_search_tree(self):
         X = self._create_windows()
         self.index = FaissSearch()
+        # self.index = cKDTreeSearch()
         self.index.create(X.astype(np.float32))
         self.is_built = True
 
