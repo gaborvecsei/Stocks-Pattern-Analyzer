@@ -1,4 +1,3 @@
-import concurrent.futures
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -76,21 +75,24 @@ def prepare_search_tree(window_size: int, force_update: bool = False):
 
 @app.get("/search/prepare", response_model=SuccessResponse, include_in_schema=False)
 def prepare_all_search_trees(force_update: bool = False):
-    with concurrent.futures.ThreadPoolExecutor() as pool:
-        futures = {}
-        for w in AVAILABLE_SEARCH_WINDOW_SIZES:
-            f = pool.submit(prepare_search_tree, window_size=w, force_update=force_update)
-            futures[f] = w
+    # The parallel creation of the search windows gives Memory error on Heroku free dynos
+    # with concurrent.futures.ThreadPoolExecutor() as pool:
+    #     futures = {}
+    #     for w in AVAILABLE_SEARCH_WINDOW_SIZES:
+    #         f = pool.submit(prepare_search_tree, window_size=w, force_update=force_update)
+    #         futures[f] = w
+    #
+    #     for f in concurrent.futures.as_completed(futures):
+    #         w = futures[f]
+    #         try:
+    #             f.result()
+    #             print(f"Search tree with size {w} prepared")
+    #         except Exception as e:
+    #             print(f"There was a problem with size {w}, could not create it")
 
-        for f in concurrent.futures.as_completed(futures):
-            w = futures[f]
-            try:
-                f.result()
-                print(f"Search tree with size {w} prepared")
-            except Exception as e:
-                print(f"There was a problem with size {w}, could not create it")
-            # prepare_search_tree(window_size=w, force_update=force_update)
-            # print(f"Search tree with size {w} prepared")
+    for w in AVAILABLE_SEARCH_WINDOW_SIZES:
+        prepare_search_tree(window_size=w, force_update=force_update)
+        print(f"Search tree with size {w} prepared")
     return SuccessResponse()
 
 
