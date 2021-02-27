@@ -21,7 +21,7 @@ def print_stats(request_execution_times: list, start_time, end_time, N: int):
 
     execution_time = end_time - start_time
     print(f"Execution time: {execution_time:.4f}")
-    print(f"FPS: {1 / execution_time:.4f}")
+    print(f"FPS: {N / execution_time:.4f}")
 
     print(f"(single) Request execution time: {request_execution_times.mean()}+/-{request_execution_times.std()} ")
 
@@ -69,4 +69,4 @@ def test_most_recent_search(N: int):
 
 
 if __name__ == "__main__":
-    test_most_recent_search(10)
+    test_most_recent_search(100)

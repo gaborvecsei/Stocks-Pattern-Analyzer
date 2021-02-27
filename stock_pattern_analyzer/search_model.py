@@ -1,96 +1,17 @@
-import abc
 import pickle
 from datetime import datetime
 from pathlib import Path
 
-import faiss
 import numpy as np
-from scipy.spatial.ckdtree import cKDTree
 from sklearn.preprocessing import minmax_scale
 
 from .data import RawStockDataHolder
+from .search_index import FaissQuantizedIndex, cKDTreeIndex
 
 MINIMUM_WINDOW_SIZE = 5
 
 
-class BaseSearch:
-
-    def __init__(self):
-        self.index = None
-
-    @abc.abstractmethod
-    def create(self, X: np.ndarray):
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def query(self, q: np.ndarray, k: int):
-        raise NotImplementedError()
-
-    # @classmethod
-    # @abc.abstractmethod
-    # def load(cls, file_path: str):
-    #     raise NotImplementedError()
-    #
-    # @abc.abstractmethod
-    # def serialize(self, file_path: str):
-    #     raise NotImplementedError()
-
-
-class FaissSearch(BaseSearch):
-
-    def __init__(self):
-        super().__init__()
-
-    def create(self, X: np.ndarray):
-        d = X.shape[-1]
-        if d % 4 == 0:
-            m = 4
-        elif d % 5 == 0:
-            m = 5
-        elif d % 2 == 0:
-            m = 2
-        else:
-            raise ValueError("This is not handled, can not find a good value for m")
-        quantizer = faiss.IndexFlatL2(d)
-        self.index = faiss.IndexIVFPQ(quantizer, d, 100, m, 8)
-        self.index.train(X)
-        self.index.add(X)
-
-    def query(self, q: np.ndarray, k: int):
-        distances, indices = self.index.search(q, k)
-        return distances[0], indices[0]
-
-    # @classmethod
-    # def load(cls, file_path: str):
-    #     obj = cls()
-    #     obj.index = faiss.read_index(file_path)
-    #     return obj
-    #
-    # def serialize(self, file_path: str):
-    #     faiss.write_index(file_path)
-
-
-class cKDTreeSearch(BaseSearch):
-
-    def __init__(self):
-        super().__init__()
-
-    def create(self, X: np.ndarray):
-        self.index = cKDTree(data=X)
-
-    def query(self, q: np.ndarray, k: int):
-        top_k_distances, top_k_indices = self.index.query(x=q, k=k)
-        return top_k_distances, top_k_indices
-
-    # @classmethod
-    # def load(cls, file_path: str):
-    #     pass
-    #
-    # def serialize(self, file_path: str):
-    #     pass
-
-
-class SearchTree:
+class SearchModel:
     def __init__(self, data_holder: RawStockDataHolder, window_size: int):
         if window_size < MINIMUM_WINDOW_SIZE:
             raise ValueError(f"Window size is too small. Minimum is {MINIMUM_WINDOW_SIZE}")
@@ -138,7 +59,7 @@ class SearchTree:
 
     def build_search_tree(self):
         X = self._create_windows()
-        self.index = FaissSearch()
+        self.index = FaissQuantizedIndex()
         # self.index = cKDTreeSearch()
         self.index.create(X.astype(np.float32))
         self.is_built = True
@@ -205,14 +126,14 @@ class SearchTree:
         return file_name
 
     @staticmethod
-    def load(file_name: str) -> "SearchTree":
+    def load(file_name: str) -> "SearchModel":
         with open(file_name, "rb") as f:
             obj = pickle.load(f)
         return obj
 
 
 def initialize_search_tree(data_holder: RawStockDataHolder, window_size: int, force_update: bool = False):
-    search_tree = SearchTree(data_holder=data_holder, window_size=window_size)
+    search_tree = SearchModel(data_holder=data_holder, window_size=window_size)
 
     file_path = Path(search_tree.create_filename_for_today())
 
@@ -221,5 +142,5 @@ def initialize_search_tree(data_holder: RawStockDataHolder, window_size: int, fo
         # TODO: implement serialization
         # search_tree.serialize()
     else:
-        search_tree = SearchTree.load(str(file_path))
+        search_tree = SearchModel.load(str(file_path))
     return search_tree

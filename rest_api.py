@@ -1,10 +1,10 @@
+import concurrent.futures
 import threading
 from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import psutil
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Response
@@ -16,7 +16,7 @@ from rest_api_models import (SuccessResponse, DataRefreshResponse, TopKSearchRes
 app = FastAPI()
 app.data_holder = None
 app.search_tree_dict = {}
-app.scheduler = AsyncIOScheduler()
+app.refresh_scheduler = AsyncIOScheduler()
 app.last_refreshed = None
 
 
@@ -49,7 +49,7 @@ def root():
     return Response(content="Welcome to the stock pattern matcher RestAPI")
 
 
-@app.get("/data/prepare", response_model=SuccessResponse)
+@app.get("/data/prepare", response_model=SuccessResponse, include_in_schema=False, tags=["data"])
 def prepare_data(force_update: bool = False):
     app.data_holder = spa.initialize_data_holder(tickers=TICKER_LIST, period_years=PERIOD_YEARS,
                                                  force_update=force_update)
@@ -67,22 +67,34 @@ def is_read():
     return IsReadyResponse(is_ready=True)
 
 
-@app.get("/search/prepare/{window_size}", response_model=SuccessResponse)
+@app.get("/search/prepare/{window_size}", response_model=SuccessResponse, include_in_schema=False)
 def prepare_search_tree(window_size: int, force_update: bool = False):
     app.search_tree_dict[window_size] = spa.initialize_search_tree(data_holder=app.data_holder, window_size=window_size,
                                                                    force_update=force_update)
     return SuccessResponse()
 
 
-@app.get("/search/prepare", response_model=SuccessResponse)
+@app.get("/search/prepare", response_model=SuccessResponse, include_in_schema=False)
 def prepare_all_search_trees(force_update: bool = False):
-    for w in AVAILABLE_SEARCH_WINDOW_SIZES:
-        prepare_search_tree(window_size=w, force_update=force_update)
-        print(f"Search tree with size {w} prepared")
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        futures = {}
+        for w in AVAILABLE_SEARCH_WINDOW_SIZES:
+            f = pool.submit(prepare_search_tree, window_size=w, force_update=force_update)
+            futures[f] = w
+
+        for f in concurrent.futures.as_completed(futures):
+            w = futures[f]
+            try:
+                f.result()
+                print(f"Search tree with size {w} prepared")
+            except Exception as e:
+                print(f"There was a problem with size {w}, could not create it")
+            # prepare_search_tree(window_size=w, force_update=force_update)
+            # print(f"Search tree with size {w} prepared")
     return SuccessResponse()
 
 
-@app.get("/data/refresh", response_model=SuccessResponse)
+@app.get("/data/refresh", response_model=SuccessResponse, include_in_schema=False)
 def refresh_data():
     # TODO: hardcoded file prefix and folder
     find_and_remove_files(".", "data_holder_*.pk")
@@ -91,7 +103,7 @@ def refresh_data():
     return SuccessResponse(message=f"Existing data holder files removed, and a new one is created")
 
 
-@app.get("/search/refresh", response_model=SuccessResponse)
+@app.get("/search/refresh", response_model=SuccessResponse, include_in_schema=False)
 def refresh_search():
     # TODO: hardcoded file prefix and folder
     find_and_remove_files(".", "search_tree_*.pk")
@@ -100,32 +112,31 @@ def refresh_search():
     return SuccessResponse()
 
 
-@app.get("/refresh", response_model=SuccessResponse)
+@app.get("/refresh", response_model=SuccessResponse, include_in_schema=False)
 def refresh_everything():
     refresh_data()
     refresh_search()
     app.last_refreshed = datetime.now()
-    print(psutil.virtual_memory())
     return SuccessResponse()
 
 
-@app.get("/refresh/when", response_model=DataRefreshResponse)
+@app.get("/refresh/when", response_model=DataRefreshResponse, tags=["refresh"])
 def when_was_data_refreshed():
     return DataRefreshResponse(date=app.last_refreshed)
 
 
-@app.get("/search/sizes", response_model=SearchWindowSizeResponse)
+@app.get("/search/sizes", response_model=SearchWindowSizeResponse, tags=["search"])
 def get_available_search_window_sizes():
     return SearchWindowSizeResponse(sizes=AVAILABLE_SEARCH_WINDOW_SIZES)
 
 
-@app.get("/data/symbols", response_model=AvailableSymbolsResponse)
+@app.get("/data/symbols", response_model=AvailableSymbolsResponse, tags=["data"])
 def get_available_symbols():
     return AvailableSymbolsResponse(symbols=TICKER_LIST)
 
 
-@app.get("/search/recent/", response_model=TopKSearchResponse)
-def search_most_recent(symbol: str, window_size: int = 5, top_k: int = 5, future_size: int = 5):
+@app.get("/search/recent/", response_model=TopKSearchResponse, tags=["search"])
+async def search_most_recent(symbol: str, window_size: int = 5, top_k: int = 5, future_size: int = 5):
     symbol = symbol.upper()
     try:
         label = app.data_holder.symbol_to_label[symbol]
@@ -199,11 +210,10 @@ def startup_event():
 
     # Refresh data after every market close
     # TODO: set the timezones and add multiple refresh jobs for the multiple market closes
-    app.scheduler.add_job(func=refresh_everything, trigger="cron", day="*", hour=8, minute=35)
-    app.scheduler.add_job(func=refresh_everything, trigger="cron", day="*", hour=15, minute=35)
-    app.scheduler.start()
+    app.refresh_scheduler.add_job(func=refresh_everything, trigger="cron", day="*", hour=8, minute=35)
+    app.refresh_scheduler.add_job(func=refresh_everything, trigger="cron", day="*", hour=15, minute=35)
+    app.refresh_scheduler.start()
 
 
 if __name__ == "__main__":
-    print(psutil.virtual_memory())
     uvicorn.run(app, host="0.0.0.0", port=8001)
