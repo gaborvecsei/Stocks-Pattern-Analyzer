@@ -20,9 +20,13 @@ app.last_refreshed = None
 
 
 def get_sp500_ticker_list() -> set:
-    table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
-    df = table[0]
-    return set(df["Symbol"].values)
+    try:
+        table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
+        df = table[0]
+        symbols = set(df["Symbol"].values)
+    except Exception:
+        symbols = set()
+    return symbols
 
 
 AVAILABLE_SEARCH_WINDOW_SIZES = list(range(6, 17, 2)) + [5, 20, 25, 30, 45]
@@ -33,10 +37,14 @@ TICKER_LIST = {"AAPL", "MSFT", "AMZN", "BABA", "ROKU", "TDOC", "CRSP", "SQ", "NV
 TICKER_LIST = TICKER_LIST.union(get_sp500_ticker_list())
 TICKER_LIST = sorted(TICKER_LIST)
 
-PERIOD_YEARS = 1
+PERIOD_YEARS = 2
 
 
-def find_and_remove_files(folder_path: str, file_pattern: str) -> list:
+def _date_to_str(date):
+    return pd.to_datetime(date).strftime("%Y-%m-%d")
+
+
+def _find_and_remove_files(folder_path: str, file_pattern: str) -> list:
     paths = Path(folder_path).glob(file_pattern)
     for p in paths:
         p.unlink()
@@ -46,13 +54,6 @@ def find_and_remove_files(folder_path: str, file_pattern: str) -> list:
 @app.get("/")
 def root():
     return Response(content="Welcome to the stock pattern matcher RestAPI")
-
-
-@app.get("/data/prepare", response_model=SuccessResponse, include_in_schema=False, tags=["data"])
-def prepare_data(force_update: bool = False):
-    app.data_holder = spa.initialize_data_holder(tickers=TICKER_LIST, period_years=PERIOD_YEARS,
-                                                 force_update=force_update)
-    return SuccessResponse()
 
 
 @app.get("/is_ready", response_model=IsReadyResponse)
@@ -66,51 +67,24 @@ def is_read():
     return IsReadyResponse(is_ready=True)
 
 
-@app.get("/search/prepare/{window_size}", response_model=SuccessResponse, include_in_schema=False)
-def prepare_search_tree(window_size: int, force_update: bool = False):
-    app.search_tree_dict[window_size] = spa.initialize_search_tree(data_holder=app.data_holder, window_size=window_size,
-                                                                   force_update=force_update)
-    return SuccessResponse()
-
-
-@app.get("/search/prepare", response_model=SuccessResponse, include_in_schema=False)
-def prepare_all_search_trees(force_update: bool = False):
-    # The parallel creation of the search windows gives Memory error on Heroku free dynos
-    # with concurrent.futures.ThreadPoolExecutor() as pool:
-    #     futures = {}
-    #     for w in AVAILABLE_SEARCH_WINDOW_SIZES:
-    #         f = pool.submit(prepare_search_tree, window_size=w, force_update=force_update)
-    #         futures[f] = w
-    #
-    #     for f in concurrent.futures.as_completed(futures):
-    #         w = futures[f]
-    #         try:
-    #             f.result()
-    #             print(f"Search tree with size {w} prepared")
-    #         except Exception as e:
-    #             print(f"There was a problem with size {w}, could not create it")
-
-    for w in AVAILABLE_SEARCH_WINDOW_SIZES:
-        prepare_search_tree(window_size=w, force_update=force_update)
-        print(f"Search tree with size {w} prepared")
-    return SuccessResponse()
+@app.get("/data/symbols", response_model=AvailableSymbolsResponse, tags=["data"])
+def get_available_symbols():
+    return AvailableSymbolsResponse(symbols=TICKER_LIST)
 
 
 @app.get("/data/refresh", response_model=SuccessResponse, include_in_schema=False)
 def refresh_data():
     # TODO: hardcoded file prefix and folder
-    find_and_remove_files(".", "data_holder_*.pk")
+    _find_and_remove_files(".", "data_holder_*.pk")
     prepare_data()
     print("Data refreshed")
     return SuccessResponse(message=f"Existing data holder files removed, and a new one is created")
 
 
-@app.get("/search/refresh", response_model=SuccessResponse, include_in_schema=False)
-def refresh_search():
-    # TODO: hardcoded file prefix and folder
-    find_and_remove_files(".", "search_tree_*.pk")
-    prepare_all_search_trees()
-    print("Search trees are refreshed")
+@app.get("/data/prepare", response_model=SuccessResponse, include_in_schema=False, tags=["data"])
+def prepare_data(force_update: bool = False):
+    app.data_holder = spa.initialize_data_holder(tickers=TICKER_LIST, period_years=PERIOD_YEARS,
+                                                 force_update=force_update)
     return SuccessResponse()
 
 
@@ -127,14 +101,49 @@ def when_was_data_refreshed():
     return DataRefreshResponse(date=app.last_refreshed)
 
 
+@app.get("/search/prepare/{window_size}", response_model=SuccessResponse, include_in_schema=False)
+def prepare_search_tree(window_size: int, force_update: bool = False):
+    app.search_tree_dict[window_size] = spa.initialize_search_tree(data_holder=app.data_holder, window_size=window_size,
+                                                                   force_update=force_update)
+    return SuccessResponse()
+
+
+@app.get("/search/prepare", response_model=SuccessResponse, include_in_schema=False)
+def prepare_all_search_trees(force_update: bool = False):
+    # TODO: The parallel creation of the search windows gives Memory error on Heroku free dynos
+    # with concurrent.futures.ThreadPoolExecutor() as pool:
+    #     futures = {}
+    #     for w in AVAILABLE_SEARCH_WINDOW_SIZES:
+    #         f = pool.submit(prepare_search_tree, window_size=w, force_update=force_update)
+    #         futures[f] = w
+    #
+    #     for f in concurrent.futures.as_completed(futures):
+    #         w = futures[f]
+    #         try:
+    #             f.result()
+    #             print(f"Search tree with size {w} prepared")
+    #         except Exception as e:
+    #             print(f"There was a problem with size {w}, could not create it")
+
+    # TODO: Sequential creation is used because this way Heroku won't crash (because of RAM limit)
+    for w in AVAILABLE_SEARCH_WINDOW_SIZES:
+        prepare_search_tree(window_size=w, force_update=force_update)
+        print(f"Search tree with size {w} prepared")
+    return SuccessResponse()
+
+
+@app.get("/search/refresh", response_model=SuccessResponse, include_in_schema=False)
+def refresh_search():
+    # TODO: hardcoded file prefix and folder
+    _find_and_remove_files(".", "search_tree_*.pk")
+    prepare_all_search_trees()
+    print("Search trees are refreshed")
+    return SuccessResponse()
+
+
 @app.get("/search/sizes", response_model=SearchWindowSizeResponse, tags=["search"])
 def get_available_search_window_sizes():
     return SearchWindowSizeResponse(sizes=AVAILABLE_SEARCH_WINDOW_SIZES)
-
-
-@app.get("/data/symbols", response_model=AvailableSymbolsResponse, tags=["data"])
-def get_available_symbols():
-    return AvailableSymbolsResponse(symbols=TICKER_LIST)
 
 
 @app.get("/search/recent/", response_model=TopKSearchResponse, tags=["search"])
@@ -163,8 +172,8 @@ async def search_most_recent(symbol: str, window_size: int = 5, top_k: int = 5, 
         ticker = search_tree.get_window_symbol(index)
         start_date, end_date = search_tree.get_start_end_date(index)
 
-        start_date_str = spa.date_to_str(start_date)
-        end_date_str = spa.date_to_str(end_date)
+        start_date_str = _date_to_str(start_date)
+        end_date_str = _date_to_str(end_date)
 
         window_with_future_values = search_tree.get_window_values(index=index,
                                                                   future_length=future_size)

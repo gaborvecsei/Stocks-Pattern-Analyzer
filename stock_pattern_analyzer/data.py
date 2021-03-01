@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Tuple
 
 import numpy as np
+import pandas as pd
 import yfinance
 from tqdm import tqdm
 
@@ -27,22 +28,29 @@ class RawStockDataHolder:
 
         self.is_filled = False
 
-    def _get_stock_data_for_symbol(self, symbol: str) -> Tuple[np.ndarray, np.ndarray, int]:
+    def _download_stock_data(self, symbol: str) -> pd.DataFrame:
         ticker = yfinance.Ticker(symbol)
         period_str = f"{self.period_years}y"
         interval_str = f"{self.interval}d"
         ticker_df = ticker.history(period=period_str, interval=interval_str, rounding=True)[::-1]
-
         if ticker_df.empty or len(ticker_df) == 0:
             raise ValueError(f"{symbol} does not have enough data")
+        return ticker_df
 
+    def _get_stock_data_for_symbol(self, symbol: str) -> Tuple[np.ndarray, np.ndarray, int]:
+        ticker_df = self._download_stock_data(symbol=symbol)
         close_values = ticker_df["Close"].values
         dates = ticker_df.index.values
         label = self.symbol_to_label[symbol]
-
         return close_values, dates, label
 
     def fill(self):
+        """
+        Fills the data holder with the defined stock data
+        Returns:
+            None
+        """
+
         pbar = tqdm(desc="Symbol data download", total=len(self.ticker_symbols))
 
         with concurrent.futures.ThreadPoolExecutor() as pool:

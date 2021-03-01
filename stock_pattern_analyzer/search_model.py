@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.preprocessing import minmax_scale
 
 from .data import RawStockDataHolder
-from .search_index import FaissQuantizedIndex, cKDTreeIndex
+from .search_index import MemoryEfficientIndex
 
 MINIMUM_WINDOW_SIZE = 5
 
@@ -15,20 +15,27 @@ class SearchModel:
     def __init__(self, data_holder: RawStockDataHolder, window_size: int):
         if window_size < MINIMUM_WINDOW_SIZE:
             raise ValueError(f"Window size is too small. Minimum is {MINIMUM_WINDOW_SIZE}")
+
         self.window_size = window_size
         self._data_holder = data_holder
 
+        # This is the object we can use for querying
         self.index = None
-
         # TODO: solve this more efficiently without wasting memory
         # This stores the start and end indices in the original array of the windows
         self.start_end_indices_in_original_array = None
         # This stores the ticket symbol label associated with every window
         self.labels = None
-
+        # This shows if the index is created or not
         self.is_built = False
 
     def _create_windows(self):
+        """
+        Create the sliding windows from the stock dara
+        Returns:
+            windows as a numpy array [n_samples, window_size]
+        """
+
         if not self._data_holder.is_filled:
             raise ValueError("Data holder needs to be filled first")
 
@@ -51,22 +58,40 @@ class SearchModel:
 
         self.start_end_indices_in_original_array = np.array(self.start_end_indices_in_original_array)
         self.labels = np.array(self.labels)
-        windows = np.array(windows)
-        windows = minmax_scale(windows, feature_range=(0, 1), axis=1)
 
+        windows = np.array(windows)
+        # Separate windows should be normalized, so it is comparable within a given window size (time-frame)
+        windows = minmax_scale(windows, feature_range=(0, 1), axis=1)
         windows = np.nan_to_num(windows)
+
         return windows
 
-    def build_search_tree(self):
+    def build_index(self):
+        """
+        Build the search index
+
+        Returns:
+            None
+        """
+
         X = self._create_windows()
-        self.index = FaissQuantizedIndex()
-        # self.index = cKDTreeSearch()
+        self.index = MemoryEfficientIndex()
         self.index.create(X.astype(np.float32))
         self.is_built = True
 
     def search(self, values: np.ndarray, k: int = 5) -> tuple:
+        """
+        Search in the data
+        Args:
+            values: "query" data - not (min-max) scaled
+            k: This is how many matches will be returned
+
+        Returns:
+            tuple: indices, distances
+        """
+
         if not self.is_built:
-            raise ValueError("You need to build teh search tree first")
+            raise ValueError("You need to build thh search tree first")
 
         values = minmax_scale(values, feature_range=(0, 1))
         if len(values.shape) == 1:
@@ -138,7 +163,7 @@ def initialize_search_tree(data_holder: RawStockDataHolder, window_size: int, fo
     file_path = Path(search_tree.create_filename_for_today())
 
     if (not file_path.exists()) or force_update:
-        search_tree.build_search_tree()
+        search_tree.build_index()
         # TODO: implement serialization
         # search_tree.serialize()
     else:

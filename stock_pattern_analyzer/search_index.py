@@ -1,35 +1,53 @@
 import abc
 import pickle
+from typing import Tuple
 
 import faiss
 import numpy as np
 from scipy.spatial.ckdtree import cKDTree
 
 
-class BaseIndex:
+class _BaseIndex:
 
     def __init__(self):
         self.index = None
 
     @abc.abstractmethod
-    def create(self, X: np.ndarray):
+    def create(self, X: np.ndarray) -> None:
+        """
+        This method creates the self.index object (index/search-tree)
+        Args:
+            X: Data [n_rows, n_features]
+
+        Returns:
+            None
+        """
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def query(self, q: np.ndarray, k: int):
+    def query(self, q: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        This method allows us to query from the index
+        Args:
+            q: query vector
+            k: number of matches to return
+
+        Returns:
+            Results as a tuple: distances, indices (from X)
+        """
         raise NotImplementedError()
 
     @classmethod
     @abc.abstractmethod
-    def load(cls, file_path: str):
+    def load(cls, file_path: str) -> "_BaseIndex":
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def serialize(self, file_path: str):
+    def serialize(self, file_path: str) -> None:
         raise NotImplementedError()
 
 
-class FaissSimpleIndex(BaseIndex):
+class FastIndex(_BaseIndex):
 
     def __init__(self):
         super().__init__()
@@ -50,13 +68,14 @@ class FaissSimpleIndex(BaseIndex):
         faiss.write_index(self.index, str(file_path))
 
 
-class FaissQuantizedIndex(BaseIndex):
+class MemoryEfficientIndex(_BaseIndex):
 
     def __init__(self):
         super().__init__()
 
     def create(self, X: np.ndarray):
         d = X.shape[-1]
+        # TODO: refine this as this is just a dummy selection for "m"
         if d % 4 == 0:
             m = 4
         elif d % 5 == 0:
@@ -84,7 +103,7 @@ class FaissQuantizedIndex(BaseIndex):
         faiss.write_index(self.index, str(file_path))
 
 
-class cKDTreeIndex(BaseIndex):
+class cKDTreeIndex(_BaseIndex):
 
     def __init__(self):
         super().__init__()

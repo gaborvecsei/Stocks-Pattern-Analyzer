@@ -28,6 +28,7 @@ def visualize_graph(match_values_list: List[np.ndarray],
 
     assert len(match_values_list) == len(match_symbols), "Something is fishy"
 
+    # Draw all matches
     for i in range(nb_matches):
         match_values = match_values_list[i]
         match_symbol = match_symbols[i]
@@ -51,6 +52,7 @@ def visualize_graph(match_values_list: List[np.ndarray],
                                    hovertemplate="<b>%{meta}</b><br>Norm. val.: %{y:.2f}<br>Value: %{customdata:.2f}$<extra></extra>")
         fig.add_trace(trace)
 
+    # Draw the anchor series
     x = list(range(1, len(anchor_values) + 1))
     trace_name = f"Anchor ({anchor_symbol})"
     trace = graph_objs.Scatter(x=x,
@@ -63,9 +65,11 @@ def visualize_graph(match_values_list: List[np.ndarray],
                                hovertemplate="<b>%{meta}</b><br>Norm. val.: %{y:.2f}<br>Value: %{customdata:.2f}$<extra></extra>")
     fig.add_trace(trace)
 
+    # Add "last market close" line
     fig.add_vline(x=window_size, line_dash="dash", line_color="black",
                   annotation_text="Last market close (for selected symbol)")
 
+    # Style the figure
     fig.update_xaxes(showspikes=True, spikecolor="black", spikesnap="cursor", spikemode="across")
     # fig.update_yaxes(showspikes=True, spikecolor="black", spikethickness=1)
 
