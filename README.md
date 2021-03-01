@@ -2,13 +2,36 @@
 
 <img src="art/homepage.png" width="800" alt="homepage"></a>
 
-## Run (for debugging)
+*As I am not a a frontend guy, the client does not work with mobile devices. This is the best I could do. Help is greatly appreciated.*
+
+## Run it locally
+
+### Run directly
 
 - `python rest_api.py`
     - Wait until the data creation and search model creation is done (1-2 mins)
 - `python dash_app.py`
     - The environment variable `$REST_API_URL` controls the connection with the RestAPI. It should be the base URL
-- Enjoy :sunglasses: 
+- Enjoy :sunglasses:
+
+### Run with a single script
+
+```shell script
+$ ./start.sh
+```
+
+### Build & Run with Docker
+
+```shell script
+# Build the image
+$ docker build -t stock -f docker/Dockerfile .
+# Run it
+$ docker run --rm --name stock -p 8050:8050 stock
+```
+
+*Disclaimer*: in a proper setup you would create 2 different images, on for the RestAPI and one for the Client App.
+Then with a `docker-compoase.yml` you could create the services. But just like with Heroku, this is a toy and local
+deployment, so I won't do fancy stuff here. 
 
 ## Deployment to Heroku (toy deployment)
 
