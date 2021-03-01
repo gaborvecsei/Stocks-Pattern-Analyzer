@@ -1,6 +1,6 @@
 # Stocks Pattern Analyzer
 
-<img src="art/homepage.png" width="400" alt="homepage"></a>
+<img src="art/homepage.png" width="800" alt="homepage"></a>
 
 ## Run (for debugging)
 
