@@ -182,4 +182,4 @@ def update_plot_and_table(symbol_value, window_size_value, future_size_value, to
 
 
 if __name__ == "__main__":
-    app.run_server(debug=False)
+    app.run_server(debug=False, host="0.0.0.0")
