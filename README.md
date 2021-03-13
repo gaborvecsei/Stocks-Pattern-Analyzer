@@ -7,6 +7,10 @@ This is the best I could do. Help is greatly appreciated.*
 
 ## Run it locally
 
+Included stocks:
+- All S&P500 companies
+- You can add additional ones with the `symbols.txt`
+
 ### Build & Run with Docker
 
 (Execute these in the root folder of the project)

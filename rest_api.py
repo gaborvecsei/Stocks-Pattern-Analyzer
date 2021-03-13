@@ -32,10 +32,12 @@ def get_sp500_ticker_list() -> set:
 AVAILABLE_SEARCH_WINDOW_SIZES = list(range(6, 17, 2)) + [5, 20, 25, 30, 45]
 AVAILABLE_SEARCH_WINDOW_SIZES = sorted(AVAILABLE_SEARCH_WINDOW_SIZES)
 
-TICKER_LIST = {"AAPL", "MSFT", "AMZN", "BABA", "ROKU", "TDOC", "CRSP", "SQ", "NVTA", "Z", "BIDU", "SPOT", "PRLB",
-               "TSLA", "GME", "BB", "AMC", "LI", "NIO"}
-TICKER_LIST = TICKER_LIST.union(get_sp500_ticker_list())
-TICKER_LIST = sorted(TICKER_LIST)
+SYMBOL_LIST = get_sp500_ticker_list()
+user_defined_tickers_file_path = Path("symbols.txt")
+if user_defined_tickers_file_path.exists():
+    user_defined_tickers = set(user_defined_tickers_file_path.read_text().split("\n"))
+    SYMBOL_LIST = SYMBOL_LIST.union(user_defined_tickers)
+SYMBOL_LIST = sorted(SYMBOL_LIST)
 
 PERIOD_YEARS = 2
 
@@ -69,7 +71,7 @@ def is_read():
 
 @app.get("/data/symbols", response_model=AvailableSymbolsResponse, tags=["data"])
 def get_available_symbols():
-    return AvailableSymbolsResponse(symbols=TICKER_LIST)
+    return AvailableSymbolsResponse(symbols=SYMBOL_LIST)
 
 
 @app.get("/data/refresh", response_model=SuccessResponse, include_in_schema=False)
@@ -83,7 +85,7 @@ def refresh_data():
 
 @app.get("/data/prepare", response_model=SuccessResponse, include_in_schema=False, tags=["data"])
 def prepare_data(force_update: bool = False):
-    app.data_holder = spa.initialize_data_holder(tickers=TICKER_LIST, period_years=PERIOD_YEARS,
+    app.data_holder = spa.initialize_data_holder(tickers=SYMBOL_LIST, period_years=PERIOD_YEARS,
                                                  force_update=force_update)
     return SuccessResponse()
 
