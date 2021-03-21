@@ -19,12 +19,12 @@ Included stocks:
 # Build the image
 $ docker build -t stock -f docker/Dockerfile .
 # Run it
-$ docker run --rm --name stock -v $(pwd):/code -p 8050:8050 stock start.sh
+$ docker run --rm --name stock -v ./code -p 8050:8050 stock start.sh
 ```
 
 After this you can access it at `localhost:8050`
 
-> *Disclaimer*: in a proper setup you would create 2 different images, on for the RestAPI and one for the Client App.
+> *Disclaimer*: in a proper setup you would create 2 different images, one for the RestAPI and one for the Client App.
 Then with a `docker-compoase.yml` you could create the services. But just like with Heroku, this is a toy and local
 deployment, so I won't do fancy stuff here. 
 
