@@ -36,12 +36,6 @@ deployment, so I won't do fancy stuff here.
     - The environment variable `$REST_API_URL` controls the connection with the RestAPI. It should be the base URL
 - Enjoy :sunglasses:
 
-### Run with a single script
-
-```shell script
-$ ./start.sh
-```
-
 ## Deployment to Heroku (toy deployment)
 
 First of all, this is a mono-repo which is not ideal, but the deployment is just an example.
