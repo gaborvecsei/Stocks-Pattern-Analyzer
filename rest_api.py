@@ -1,6 +1,8 @@
 import threading
+import itertools
 from datetime import datetime
 from pathlib import Path
+from typing import Set, Tuple
 
 import numpy as np
 import pandas as pd
@@ -29,17 +31,28 @@ def get_sp500_ticker_list() -> set:
     return symbols
 
 
+def currency_pairs_symbol_list() -> set:
+    table = pd.read_html("https://en.wikipedia.org/wiki/Currency_pair")
+    df = table[2]
+    currency_symbols: Set[str] = set(df["ISO 4217 code"].values)
+    currency_pairs: Set[Tuple[str, str]] = set(itertools.product(["EUR"], currency_symbols))
+    currency_pair_str_list: Set[str] = {f"{x}{y}=X" for x, y in currency_pairs}
+    return currency_pair_str_list
+
+
+
 AVAILABLE_SEARCH_WINDOW_SIZES = list(range(6, 17, 2)) + [5, 20, 25, 30, 45]
 AVAILABLE_SEARCH_WINDOW_SIZES = sorted(AVAILABLE_SEARCH_WINDOW_SIZES)
 
-SYMBOL_LIST = get_sp500_ticker_list()
+# SYMBOL_LIST = get_sp500_ticker_list()
+SYMBOL_LIST = currency_pairs_symbol_list()
 user_defined_tickers_file_path = Path("symbols.txt")
 if user_defined_tickers_file_path.exists():
     user_defined_tickers = set(user_defined_tickers_file_path.read_text().split("\n"))
     SYMBOL_LIST = SYMBOL_LIST.union(user_defined_tickers)
 SYMBOL_LIST = sorted(SYMBOL_LIST)
 
-PERIOD_YEARS = 2
+PERIOD_YEARS = 20
 
 
 def _date_to_str(date):
