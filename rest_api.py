@@ -1,18 +1,25 @@
-import threading
-import itertools
 from datetime import datetime
+import itertools
 from pathlib import Path
+import threading
 from typing import Set, Tuple
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import numpy as np
 import pandas as pd
-import uvicorn
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import FastAPI, HTTPException, Response
 
+from fastapi import FastAPI, HTTPException, Response
+from rest_api_models import (
+    AvailableSymbolsResponse,
+    DataRefreshResponse,
+    IsReadyResponse,
+    MatchResponse,
+    SearchWindowSizeResponse,
+    SuccessResponse,
+    TopKSearchResponse,
+)
 import stock_pattern_analyzer as spa
-from rest_api_models import (SuccessResponse, DataRefreshResponse, TopKSearchResponse, AvailableSymbolsResponse,
-                             SearchWindowSizeResponse, MatchResponse, IsReadyResponse)
+import uvicorn
 
 app = FastAPI()
 app.data_holder = None
@@ -21,36 +28,42 @@ app.refresh_scheduler = AsyncIOScheduler()
 app.last_refreshed = None
 
 
-def get_sp500_ticker_list() -> set:
-    try:
-        table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
-        df = table[0]
-        symbols = set(df["Symbol"].values)
-    except Exception:
-        symbols = set()
+def _get_sp500_ticker_list() -> set:
+    table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
+    df = table[0]
+    symbols = set(df["Symbol"].values)
     return symbols
 
 
-def currency_pairs_symbol_list() -> set:
+def _get_currency_pairs_symbol_list(base_currency: str) -> set:
     table = pd.read_html("https://en.wikipedia.org/wiki/Currency_pair")
     df = table[2]
     currency_symbols: Set[str] = set(df["ISO 4217 code"].values)
-    currency_pairs: Set[Tuple[str, str]] = set(itertools.product(["EUR"], currency_symbols))
+    currency_pairs: Set[Tuple[str, str]] = set(itertools.product([base_currency.upper()], currency_symbols))
+    # This is a format what yahoo finance uses
     currency_pair_str_list: Set[str] = {f"{x}{y}=X" for x, y in currency_pairs}
     return currency_pair_str_list
-
 
 
 AVAILABLE_SEARCH_WINDOW_SIZES = list(range(6, 17, 2)) + [5, 20, 25, 30, 45]
 AVAILABLE_SEARCH_WINDOW_SIZES = sorted(AVAILABLE_SEARCH_WINDOW_SIZES)
 
-# SYMBOL_LIST = get_sp500_ticker_list()
-SYMBOL_LIST = currency_pairs_symbol_list()
 user_defined_tickers_file_path = Path("symbols.txt")
+user_defined_tickers: Set[str] = set()
 if user_defined_tickers_file_path.exists():
     user_defined_tickers = set(user_defined_tickers_file_path.read_text().split("\n"))
-    SYMBOL_LIST = SYMBOL_LIST.union(user_defined_tickers)
-SYMBOL_LIST = sorted(SYMBOL_LIST)
+else:
+    raise FileNotFoundError("We need a symbols.txt - check readme")
+
+if "$SP500" in user_defined_tickers:
+    sp500_symbols = _get_sp500_ticker_list()
+    user_defined_tickers = user_defined_tickers.union(sp500_symbols)
+
+if "$CURRENCY_PAIRS" in user_defined_tickers:
+    currency_pair_symbols = _get_currency_pairs_symbol_list("EUR")
+    user_defined_tickers = user_defined_tickers.union(currency_pair_symbols)
+
+SYMBOL_LIST = sorted(user_defined_tickers)
 
 PERIOD_YEARS = 20
 
@@ -98,7 +111,8 @@ def refresh_data():
 
 @app.get("/data/prepare", response_model=SuccessResponse, include_in_schema=False, tags=["data"])
 def prepare_data(force_update: bool = False):
-    app.data_holder = spa.initialize_data_holder(tickers=SYMBOL_LIST, period_years=PERIOD_YEARS,
+    app.data_holder = spa.initialize_data_holder(tickers=SYMBOL_LIST,
+                                                 period_years=PERIOD_YEARS,
                                                  force_update=force_update)
     return SuccessResponse()
 
@@ -118,7 +132,8 @@ def when_was_data_refreshed():
 
 @app.get("/search/prepare/{window_size}", response_model=SuccessResponse, include_in_schema=False)
 def prepare_search_tree(window_size: int, force_update: bool = False):
-    app.search_tree_dict[window_size] = spa.initialize_search_tree(data_holder=app.data_holder, window_size=window_size,
+    app.search_tree_dict[window_size] = spa.initialize_search_tree(data_holder=app.data_holder,
+                                                                   window_size=window_size,
                                                                    force_update=force_update)
     return SuccessResponse()
 
@@ -190,8 +205,7 @@ async def search_most_recent(symbol: str, window_size: int = 5, top_k: int = 5, 
         start_date_str = _date_to_str(start_date)
         end_date_str = _date_to_str(end_date)
 
-        window_with_future_values = search_tree.get_window_values(index=index,
-                                                                  future_length=future_size)
+        window_with_future_values = search_tree.get_window_values(index=index, future_length=future_size)
         todays_value = window_with_future_values[-window_size]
         future_value = window_with_future_values[0]
         diff_from_today = todays_value - future_value
