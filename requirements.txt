@@ -9,7 +9,7 @@ matplotlib
 fastapi
 pydantic
 apscheduler
-uvicorn
+uvicorn[standard]
 scikit-learn
 gunicorn
 scipy

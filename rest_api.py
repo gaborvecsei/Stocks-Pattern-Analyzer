@@ -2,13 +2,13 @@ from datetime import datetime
 import itertools
 from pathlib import Path
 import threading
-from typing import Set, Tuple
+from typing import Optional, Set, Tuple
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from fastapi import FastAPI, HTTPException, Response
 import numpy as np
 import pandas as pd
 
-from fastapi import FastAPI, HTTPException, Response
 from rest_api_models import (
     AvailableSymbolsResponse,
     DataRefreshResponse,
@@ -19,13 +19,8 @@ from rest_api_models import (
     TopKSearchResponse,
 )
 import stock_pattern_analyzer as spa
-import uvicorn
 
 app = FastAPI()
-app.data_holder = None
-app.search_tree_dict = {}
-app.refresh_scheduler = AsyncIOScheduler()
-app.last_refreshed = None
 
 
 def _get_sp500_ticker_list() -> set:
@@ -57,15 +52,27 @@ else:
 
 if "$SP500" in user_defined_tickers:
     sp500_symbols = _get_sp500_ticker_list()
+    user_defined_tickers.remove("$SP500")
     user_defined_tickers = user_defined_tickers.union(sp500_symbols)
 
 if "$CURRENCY_PAIRS" in user_defined_tickers:
     currency_pair_symbols = _get_currency_pairs_symbol_list("EUR")
+    user_defined_tickers.remove("$CURRENCY_PAIRS")
     user_defined_tickers = user_defined_tickers.union(currency_pair_symbols)
 
 SYMBOL_LIST = sorted(user_defined_tickers)
 
 PERIOD_YEARS = 20
+
+
+def _prepare_data(force_update: bool = False) -> spa.RawStockDataHolder:
+    return spa.initialize_data_holder(tickers=SYMBOL_LIST, period_years=PERIOD_YEARS, force_update=force_update)
+
+
+data_holder: spa.RawStockDataHolder = _prepare_data()
+search_tree_dict: dict = {}
+refresh_scheduler: AsyncIOScheduler = AsyncIOScheduler()
+last_refreshed: Optional[datetime] = None
 
 
 def _date_to_str(date):
@@ -86,10 +93,10 @@ def root():
 
 @app.get("/is_ready", response_model=IsReadyResponse)
 def is_read():
-    if app.data_holder is None or app.data_holder.is_filled:
+    if (data_holder is None) or not data_holder.is_filled:
         return IsReadyResponse(is_ready=False)
 
-    if len(app.search_tree_dict) == 0:
+    if len(search_tree_dict) == 0:
         return IsReadyResponse(is_ready=False)
 
     return IsReadyResponse(is_ready=True)
@@ -104,37 +111,32 @@ def get_available_symbols():
 def refresh_data():
     # TODO: hardcoded file prefix and folder
     _find_and_remove_files(".", "data_holder_*.pk")
-    prepare_data()
+    global data_holder
+    data_holder = _prepare_data()
     print("Data refreshed")
-    return SuccessResponse(message=f"Existing data holder files removed, and a new one is created")
-
-
-@app.get("/data/prepare", response_model=SuccessResponse, include_in_schema=False, tags=["data"])
-def prepare_data(force_update: bool = False):
-    app.data_holder = spa.initialize_data_holder(tickers=SYMBOL_LIST,
-                                                 period_years=PERIOD_YEARS,
-                                                 force_update=force_update)
-    return SuccessResponse()
+    return SuccessResponse(message="Existing data holder files removed, and a new one is created")
 
 
 @app.get("/refresh", response_model=SuccessResponse, include_in_schema=False)
 def refresh_everything():
     refresh_data()
     refresh_search()
-    app.last_refreshed = datetime.now()
+    global last_refreshed
+    last_refreshed = datetime.now()
     return SuccessResponse()
 
 
 @app.get("/refresh/when", response_model=DataRefreshResponse, tags=["refresh"])
 def when_was_data_refreshed():
-    return DataRefreshResponse(date=app.last_refreshed)
+    return DataRefreshResponse(date=last_refreshed)
 
 
 @app.get("/search/prepare/{window_size}", response_model=SuccessResponse, include_in_schema=False)
 def prepare_search_tree(window_size: int, force_update: bool = False):
-    app.search_tree_dict[window_size] = spa.initialize_search_tree(data_holder=app.data_holder,
-                                                                   window_size=window_size,
-                                                                   force_update=force_update)
+    global search_tree_dict
+    search_tree_dict[window_size] = spa.initialize_search_tree(data_holder=data_holder,
+                                                               window_size=window_size,
+                                                               force_update=force_update)
     return SuccessResponse()
 
 
@@ -180,13 +182,13 @@ def get_available_search_window_sizes():
 async def search_most_recent(symbol: str, window_size: int = 5, top_k: int = 5, future_size: int = 5):
     symbol = symbol.upper()
     try:
-        label = app.data_holder.symbol_to_label[symbol]
+        label = data_holder.symbol_to_label[symbol]
     except KeyError:
         raise HTTPException(status_code=400, detail=f"Ticker symbol {symbol} is not supported")
-    most_recent_values = app.data_holder.values[label][:window_size]
+    most_recent_values = data_holder.values[label][:window_size]
 
     try:
-        search_tree = app.search_tree_dict[window_size]
+        search_tree = search_tree_dict[window_size]
     except KeyError:
         raise HTTPException(status_code=400, detail=f"No prepared {window_size} day search window")
 
@@ -250,10 +252,6 @@ def startup_event():
 
     # Refresh data after every market close
     # TODO: set the timezones and add multiple refresh jobs for the multiple market closes
-    app.refresh_scheduler.add_job(func=refresh_everything, trigger="cron", day="*", hour=8, minute=35)
-    app.refresh_scheduler.add_job(func=refresh_everything, trigger="cron", day="*", hour=15, minute=35)
-    app.refresh_scheduler.start()
-
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    refresh_scheduler.add_job(func=refresh_everything, trigger="cron", day="*", hour=8, minute=35)
+    refresh_scheduler.add_job(func=refresh_everything, trigger="cron", day="*", hour=15, minute=35)
+    refresh_scheduler.start()
