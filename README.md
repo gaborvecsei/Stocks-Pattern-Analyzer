@@ -7,9 +7,12 @@ This is the best I could do. Help is greatly appreciated.*
 
 ## Run it locally
 
-Included stocks:
-- All S&P500 companies
-- You can add additional ones with the `symbols.txt`
+Include ticker symbols with the `symbols.txt` file - put each symbol here in a new line. Check `symbols.txt.example` for
+an example use case.
+
+There are 2 special symbols which you can use as a shortcut
+- `$SP500` to include all S&P500 symbols
+- `$CURRENCY_PAIRS` to include currency pairs where the base currency is EUR
 
 ### Build & Run with Docker
 
